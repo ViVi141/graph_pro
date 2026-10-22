@@ -1,0 +1,16 @@
+World	8	CleanUpDeinit,FadeInMission,PerformAI,PrepareDrawPrepareCloudlets,ShowMap,Simulate,SimulateAllVehicles,SimulateCloudletsAndSound
+Landscape	5	GetObjectLocked,HasWaterGroundCollision,IntersectSphere,ObjectRoadSurfaceY,PrepareGroundClutter
+Editor3D::ObjectContainer	2	OnDraw,RegisterInteractiveSpots
+Editor3D::MainDisplay	2	FillMenuWithConnectOperations,UpdateEditTree
+DisplayCampaignMPLoad	2	LoadCampaign,LoadParams
+CListBoxContainer	2	SortItems,SortItemsANSI
+Scene	1	SelectActiveAggLights
+JobMRRenderUIToTexture	1	Process
+JobMRRenderTextToTexture	1	Process
+EntityAIType	1	InitShape
+EntityAI	1	FindEmptyPositionForUnload
+DataIntegrityMonitor	1	Init
+DX11::EngineDD11	1	GetDriverVersion
+AIUnit	1	FSMFormationCanLeaveCover
+AIPathPlanner	1	ProcessSearching
+AIGroup	1	UnassignVehicle

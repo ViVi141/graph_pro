@@ -1,0 +1,25 @@
+# C1 YAAB RIP sample — 2026-10-22
+# configs: GP_sample.txt = 50 60 5; full sample 1080p YAAB
+# artifacts: GP_sample_top.txt, c1_yaab_annotated.txt
+
+samples_in_exe: ~2472
+misses_outside_exe: ~131966
+exe_hit_rate: ~1.8%
+
+# Top (of in-exe hits only)
+# 1  1.82%  0x01A249F0  Simulate 16-way jump dispatcher (docs/11)
+# 2  1.70%  0x01698F85  unlabeled mid/large
+# 3  1.66%  0x0125BA20  large prologue / subsystem
+# 4  1.66%  0x01A25430  memcmp-like byte loop (CRT-ish)
+# … flat: no function >2% of in-exe samples
+
+verdict: C1 partial GO / replace NO-GO for single-leaf
+reason:
+- time is flat across many engine fns
+- ~98% samples not even in Arma3_x64.exe (wait/ntdll/d3d/driver/mimalloc)
+- top symbol is dispatcher, not a compute leaf
+
+next:
+- C1b: module-aware sample (attribute ntdll/d3d11/dxgi/mimalloc)
+- soft CPU: sceneComplexity / AI / scripts (bigger lever than leaf SIMD)
+- optional C2 only on memcmp-like + SIMD tiny leaves if module pass confirms exe compute matters

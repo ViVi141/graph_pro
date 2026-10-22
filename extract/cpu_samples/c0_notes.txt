@@ -1,0 +1,14 @@
+scene: Yet Another Arma Benchmark (YAAB) v1.02
+arma: 2.22.154089
+view_distance: 1600
+object_distance: 1300
+notes_launch: -enableHT -malloc=mimalloc_...
+
+# C0 — display stays 1080p; "半采样率" = half render/sample scale
+full_res:     1920x1080  (full sample)   fps_avg=64.8   run_s=139   frames=9018
+              overlay: cpu%~143  gpu%~76
+half_sample:  1920x1080  (half sample)   fps_avg=68.6   run_s=139   frames=9534
+              overlay: cpu%~106  gpu%~82  fps_min/max~56/84
+ratio_half_over_full: 68.6/64.8 = 1.059   (~+6%)
+verdict: CPU-bound
+notes: half sample barely moves FPS; GPU rose 76→82% but frame rate did not scale. Proceed C1 (RIP gpsample), not render sampling.

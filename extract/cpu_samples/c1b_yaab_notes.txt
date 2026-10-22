@@ -1,0 +1,35 @@
+# C1b YAAB module sample — 2026-10-22
+# total 84975  exe_fn 1819  exe_gap 327
+
+## Raw (all threads, including blocked)
+ntdll.dll              92.65%   # mostly Wait/Syscall stubs — NOT compute
+win32u.dll              3.36%   # win32k waits / GDI path
+Arma3_x64.exe           2.53%
+igd10umt64xe.DLL        0.93%   # Intel UMD
+PhysX_64.dll            0.25%
+d3d11.dll               0.10%
+mimalloc_*.dll          0.02%   # allocator already fine
+
+## Renormalized: exclude ntdll + win32u (approx "runnable/compute")
+active ≈ 84975 - 78729 - 2854 = 3392 samples
+
+Arma3_x64.exe          63.3%   # engine compute (flat inside; see C1)
+igd10umt64xe.DLL       23.3%   # Intel user-mode driver
+PhysX*                  7.9%   # PhysX_64 + Common + Foundation
+d3d11.dll               2.4%
+mimalloc                0.5%
+other                   ~2.6%
+
+## Verdict
+1. Suspend sampling is wait-biased; raw 92% ntdll ≠ CPU burning in ntdll.
+2. Of non-wait hits: engine ~2/3, Intel UMD ~1/4, PhysX ~8%.
+3. Single exe leaf still flat (top ~0.04% of total / ~1.8% of exe_fn) → leaf SIMD NO-GO.
+4. Levers that match data:
+   - soft: sceneComplexity / AI / objects (cut engine work)
+   - iGPU path: cut draw/state (driver 23% of active) — cfg MSAA/PP, not d3d11 API
+   - PhysX: fewer simulated bodies / vehicles if mission allows
+   - mimalloc: keep; not the bottleneck
+
+## Next (optional C1c)
+Filter waits inside gpsample (skip ntdll/win32u or only Running threads)
+so YAAB dumps show active% directly.

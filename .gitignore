@@ -1,0 +1,100 @@
+# --- OS / editor ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+*.user
+*.suo
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# --- C/C++ build (inject, tools) ---
+*.obj
+*.o
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.iobj
+*.ipdb
+*.idb
+*.sbr
+*.pch
+*.res
+*.aps
+*.VC.db
+*.VC.opendb
+ipch/
+x64/
+Win32/
+Debug/
+Release/
+*.tlog
+*.lastbuildstate
+
+# Built injectors / probes (rebuild with *.bat / cl)
+*.dll
+*.exe
+
+# --- Runtime logs / dumps next to tools ---
+*.log
+inject/_*.log
+inject/counter/GP_*.log
+inject/counter/GP_timerdump.txt
+inject/counter/GP_indirectdump.txt
+inject/counter/GP_sample_top.txt
+inject/counter/GP_sample_modules.txt
+
+# Generated pdata tables (prepare_funcs.ps1)
+inject/counter/funcs.bin
+inject/counter/funcs_client.bin
+inject/counter/funcs_server.bin
+
+# --- Extract: large / regenerable / timestamped ---
+extract/**/*.shdc
+extract/**/*.png
+*.npy
+*.npz
+extract/dxbc/
+extract/dxbc_mat/
+extract/dxbc_ssao/
+extract/shdc/
+extract/rvmat/
+
+# Timestamped YAAB / sampler dumps (keep curated *_notes / *_summary / deep xref)
+extract/cpu_samples/log_*.txt
+extract/cpu_samples/top_*.txt
+extract/cpu_samples/modules_*.txt
+extract/cpu_samples/timer_*.txt
+extract/cpu_samples/timerlog_*.txt
+extract/cpu_samples/indirect_*.txt
+extract/cpu_samples/indirectlog_*.txt
+
+# --- Demo screenshots (large; regenerate via mission) ---
+demo/**/*.png
+demo/**/*.jpg
+demo/**/*.jpeg
+demo/_live/
+
+# --- Local / secrets / game copies ---
+*.mdmp
+*.rpt
+dxDiag.txt
+.env
+*.pem
+*.key
+
+# Backups
+*.bak
+*.orig
+*~

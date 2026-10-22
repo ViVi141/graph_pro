@@ -1,0 +1,9 @@
+# RVA (hex)  label
+# From docs/11-re-findings.md — Arma3_x64 2.22
+0x11527E0	World::Simulate
+0x1106B30	World::PerformAI_lambda_ref
+0x1369C60	AIPathPlanner::ProcessSearching_lambda_ref
+0x15E8220	Landscape::PrepareGroundClutter_lambda_ref
+0x110AD20	Simulate_callee_counterish
+0x1260C00	Simulate_callee_large_subsys
+0x1A249F0	Simulate_callee_16way_dispatch

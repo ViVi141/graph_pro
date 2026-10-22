@@ -1,0 +1,5 @@
+@echo off
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" >nul
+cd /d "C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter"
+cl /nologo /LD /MT /O2 /EHsc gpcount.cpp /link /OUT:gpcount.dll
+cl /nologo /MT /O2 /EHsc injector.cpp /link /OUT:injector.exe

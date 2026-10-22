@@ -1,0 +1,120 @@
+# sim step 0x1155340 size=4604
+# insns=1053 direct_calls=76 distinct=43 indirect=30
+
+## own strings
+  - mtVehS
+  - {error} Strange - simulation started twice in a frame?
+
+## callees by count
+   8x  0x01133850  sz=  204  [unlabeled]  
+   5x  0x010FB530  sz=   33  [tiny]  
+   5x  0x010FB600  sz=   35  [tiny]  
+   4x  0x01120540  sz=   22  [tiny]  
+   4x  0x0115B980  sz=  296  [unlabeled]  
+   3x  0x0115BAB0  sz=  104  [unlabeled]  
+   3x  0x01125DF0  sz=   17  [tiny]  
+   3x  0x011586F0  sz=   17  [tiny]  
+   3x  0x011182D0  sz=  136  [unlabeled]  
+   2x  0x00350EF0  sz=   -1  [tiny]  
+   2x  0x01159470  sz=   34  [tiny]  
+   2x  0x01108700  sz=  477  [unlabeled]  
+   2x  0x0110BA80  sz=  217  [unlabeled]  
+   1x  0x0188C9A0  sz=   78  [unlabeled]  
+   1x  0x011259D0  sz=  130  [unlabeled]  
+   1x  0x01120E90  sz=   56  [tiny]  
+   1x  0x01120FF0  sz=   56  [tiny]  
+   1x  0x0114F370  sz=   13  [tiny]  
+   1x  0x00385E40  sz=   -1  [tiny]  
+   1x  0x00445540  sz=   -1  [tiny]  
+   1x  0x00446130  sz=   -1  [tiny]  
+   1x  0x011258E0  sz=  240  [unlabeled]  
+   1x  0x007C1DA0  sz=   56  [tiny]  
+   1x  0x0110F254  sz=   -1  [tiny]  
+   1x  0x00384500  sz=   -1  [tiny]  Error::can::resize::negative::size
+       str "Error: can't resize AutoArray to negative size!"
+   1x  0x010FCE10  sz= 1731  [unlabeled]  ParallelFor::sync, pFor, subSync
+       str 'ParallelFor sync'
+       str 'pFor'
+       str 'subSync'
+   1x  0x0013E2B0  sz=  104  [unlabeled]  
+   1x  0x01005C90  sz=   22  [tiny]  
+   1x  0x00447D00  sz=   81  [unlabeled]  
+   1x  0x00385B30  sz=  124  [unlabeled]  
+   1x  0x01159700  sz=  144  [unlabeled]  
+   1x  0x010FABA0  sz=   20  [tiny]  
+   1x  0x01159AF0  sz=   69  [unlabeled]  
+   1x  0x00FD85B0  sz=   47  [tiny]  
+   1x  0x00FD8710  sz=   47  [tiny]  
+   1x  0x00FDAE40  sz=   44  [tiny]  
+   1x  0x00261640  sz=  137  [unlabeled]  Error::can::resize::negative::size
+       str "Error: can't resize AutoArray to negative size!"
+   1x  0x00E77000  sz=   76  [unlabeled]  
+   1x  0x00E777A0  sz=  150  [unlabeled]  
+   1x  0x0110F260  sz=   -1  [tiny]  
+   1x  0x0115A800  sz=   24  [tiny]  
+   1x  0x00398960  sz=   59  [tiny]  
+   1x  0x00385E60  sz=   -1  [tiny]  
+
+## callees by size (among called)
+   1x  0x010FCE10  sz= 1731  [unlabeled]  ParallelFor::sync, pFor, subSync
+   2x  0x01108700  sz=  477  [unlabeled]  
+   4x  0x0115B980  sz=  296  [unlabeled]  
+   1x  0x011258E0  sz=  240  [unlabeled]  
+   2x  0x0110BA80  sz=  217  [unlabeled]  
+   8x  0x01133850  sz=  204  [unlabeled]  
+   1x  0x00E777A0  sz=  150  [unlabeled]  
+   1x  0x01159700  sz=  144  [unlabeled]  
+   1x  0x00261640  sz=  137  [unlabeled]  Error::can::resize::negative::size
+   3x  0x011182D0  sz=  136  [unlabeled]  
+   1x  0x011259D0  sz=  130  [unlabeled]  
+   1x  0x00385B30  sz=  124  [unlabeled]  
+   3x  0x0115BAB0  sz=  104  [unlabeled]  
+   1x  0x0013E2B0  sz=  104  [unlabeled]  
+   1x  0x00447D00  sz=   81  [unlabeled]  
+   1x  0x0188C9A0  sz=   78  [unlabeled]  
+   1x  0x00E77000  sz=   76  [unlabeled]  
+   1x  0x01159AF0  sz=   69  [unlabeled]  
+   1x  0x00398960  sz=   59  [tiny]  
+   1x  0x01120E90  sz=   56  [tiny]  
+
+## phase map
+  phase0 0x1155340-0x115563F calls=21
+      5x 0x010FB530 [tiny]
+      2x 0x00350EF0 [tiny]
+      1x 0x0188C9A0 [unlabeled]
+      1x 0x011259D0 [unlabeled]
+      1x 0x01120E90 [tiny]
+  phase1 0x115563F-0x115593E calls=7
+      2x 0x01133850 [unlabeled]
+      1x 0x01005C90 [tiny]
+      1x 0x00447D00 [unlabeled]
+      1x 0x00385B30 [unlabeled]
+      1x 0x0115BAB0 [unlabeled]
+  phase2 0x115593E-0x1155C3E calls=7
+      2x 0x01133850 [unlabeled]
+      1x 0x01120540 [tiny]
+      1x 0x01125DF0 [tiny]
+      1x 0x011586F0 [tiny]
+      1x 0x011182D0 [unlabeled]
+  phase3 0x1155C3E-0x1155F3D calls=13
+      4x 0x0115B980 [unlabeled]
+      1x 0x011182D0 [unlabeled]
+      1x 0x0115BAB0 [unlabeled]
+      1x 0x01159700 [unlabeled]
+      1x 0x011586F0 [tiny]
+  phase4 0x1155F3D-0x115623C calls=7
+      2x 0x01133850 [unlabeled]
+      1x 0x00261640 [unlabeled]
+      1x 0x011182D0 [unlabeled]
+      1x 0x00E77000 [unlabeled]
+      1x 0x00E777A0 [unlabeled]
+  phase5 0x115623C-0x115653C calls=21
+      5x 0x010FB600 [tiny]
+      2x 0x01159470 [tiny]
+      2x 0x01133850 [unlabeled]
+      2x 0x01125DF0 [tiny]
+      2x 0x01108700 [unlabeled]
+
+## kind histogram (by call count)
+  tiny                  calls=42
+  unlabeled             calls=34

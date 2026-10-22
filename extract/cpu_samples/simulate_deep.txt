@@ -1,0 +1,197 @@
+World::Simulate deep RE
+RVA 0x11527E0 size 11093  ImageBase 0x140000000
+instructions=2498 direct_calls=265 distinct=147 indirect_calls=107 backward_jumps~17
+
+== RTTI tied to Simulate@World ==
+  0x21548E0  SoundMainTask (from Simulate)
+           .?AVSoundMainTask@?1??Simulate@World@@QEAAXMAEA_N0@Z@
+  0x2154CA0  job: Simulate InvokerLambda
+           .?AU?$InvokerLambda@V<lambda_1>@?HA@??Simulate@World@@QEAAXMAEA_N0@Z@XI@@
+  0x2154D00  job: Simulate InvokerLambda
+           .?AU?$InvokerLambda@V<lambda_2>@?1??Simulate@World@@QEAAXMAEA_N0@Z@XI@@
+  0x2154FE0  job: Simulate/Entity lambda
+           .?AU?$InvokerLambda@V<lambda_1>@?1???R1?HA@??Simulate@World@@QEAAXMAEA_N0@Z@QEBA@I@Z@_NPEAVEntity@@@@
+
+== Prologue ==
+  011527E0: mov qword ptr [rsp + 0x20], r9
+  011527E5: mov qword ptr [rsp + 0x18], r8
+  011527EA: mov qword ptr [rsp + 8], rcx
+  011527EF: push rbp
+  011527F0: push rbx
+  011527F1: push rsi
+  011527F2: push rdi
+  011527F3: push r12
+  011527F5: push r13
+  011527F7: push r14
+  011527F9: push r15
+  011527FB: sub rsp, 0x6d8
+  01152802: lea rbp, [rsp + 0x50]
+  01152807: movaps xmmword ptr [rbp + 0x670], xmm6
+  0115280E: mov rdi, rcx
+  01152811: movaps xmmword ptr [rbp + 0x660], xmm7
+  01152818: lea rcx, [rip + 0x10c86e1]
+  0115281F: movaps xmmword ptr [rbp + 0x650], xmm8
+  01152827: xor r15d, r15d
+  0115282A: movaps xmmword ptr [rbp + 0x640], xmm9
+  01152832: mov rsi, r9
+  01152835: movaps xmmword ptr [rbp + 0x630], xmm10
+  0115283D: mov rbx, r8
+  01152840: movaps xmmword ptr [rbp + 0x620], xmm11
+  01152848: movaps xmm10, xmm1
+
+== Top callees by call count ==
+  17x  0x0110AD20  size=   10  tiny counter/clear ([rcx+8])
+  10x  0x003859C0  size=  154  helper (called 10x)
+   8x  0x00BA53C0  size=   -1  outside_pdata?
+   6x  0x01127F80  size=  142  helper (6x)
+   6x  0x00145D80  size=  127  helper (6x)
+   6x  0x0013DB60  size=  141  helper (6x)
+   5x  0x0112FC20  size=  350  fn size=350
+   5x  0x011272A0  size=  280  fn size=280
+   4x  0x001271B0  size=   -1  outside_pdata?
+   4x  0x0012A940  size=   57  fn size=57
+   4x  0x01A249F0  size= 1645  16-way jump dispatcher (job/type switch)
+   4x  0x00140B70  size=  236  fn size=236
+   4x  0x0112F8B0  size=  151  fn size=151
+   4x  0x01260C00  size= 2595  large subsystem @ World+0xac8 path
+   4x  0x00398960  size=   59  fn size=59
+   4x  0x010FB420  size=   35  fn size=35
+   3x  0x00398310  size=   59  fn size=59
+   3x  0x019B72D4  size=  358  fn size=358
+   3x  0x01133850  size=  204  fn size=204
+   3x  0x0020D780  size=   78  fn size=78
+   3x  0x01143F60  size=  116  fn size=116
+   3x  0x00141040  size=  241  fn size=241
+   3x  0x01011AD0  size=  166  fn size=166
+   3x  0x001BC2F0  size=   22  tiny leaf size=22
+   2x  0x006C98C0  size=  121  fn size=121
+
+== Top callees by size (among those called) ==
+   2x  0x011456D0  size= 5433  large fn size=5433
+   1x  0x01155340  size= 4604  large fn size=4604
+   4x  0x01260C00  size= 2595  large subsystem @ World+0xac8 path
+   1x  0x011566C0  size= 2104  large fn size=2104
+   4x  0x01A249F0  size= 1645  16-way jump dispatcher (job/type switch)
+   2x  0x00384D00  size= 1304  fn size=1304
+   1x  0x01263C50  size= 1255  fn size=1255
+   1x  0x00145250  size= 1233  fn size=1233
+   1x  0x0027A460  size= 1069  fn size=1069
+   1x  0x01156F00  size=  995  fn size=995
+   2x  0x0162CFA0  size=  773  fn size=773
+   1x  0x0014C770  size=  751  fn size=751
+   1x  0x0036D5E0  size=  615  fn size=615
+   1x  0x011084A0  size=  593  fn size=593
+   2x  0x01014A70  size=  446  fn size=446
+   2x  0x001501C0  size=  412  fn size=412
+   1x  0x015E01F0  size=  397  fn size=397
+   1x  0x007A6930  size=  362  fn size=362
+   3x  0x019B72D4  size=  358  fn size=358
+   5x  0x0112FC20  size=  350  fn size=350
+
+== Phase map (8 slices of function body) ==
+  phase0  0x11527E0-0x1152D4A  calls=38
+      2x 0x001271B0  outside_pdata?
+      2x 0x006C98C0  fn size=121
+      2x 0x001BA9A0  fn size=123
+      2x 0x00398310  fn size=59
+      2x 0x0012A940  fn size=57
+  phase1  0x1152D4A-0x11532B5  calls=42
+      3x 0x00140B70  fn size=236
+      3x 0x011272A0  fn size=280
+      3x 0x00BA53C0  outside_pdata?
+      3x 0x01133850  fn size=204
+      2x 0x0112FC20  fn size=350
+  phase2  0x11532B5-0x115381F  calls=29
+      2x 0x0112FC20  fn size=350
+      2x 0x0112F8B0  fn size=151
+      2x 0x003859C0  helper (called 10x)
+      2x 0x0112FD80  fn size=158
+      2x 0x00E51EF0  outside_pdata?
+  phase3  0x115381F-0x1153D8A  calls=35
+      3x 0x003859C0  helper (called 10x)
+      3x 0x00398960  fn size=59
+      2x 0x0112F8B0  fn size=151
+      2x 0x016E6830  fn size=40
+      2x 0x001271B0  outside_pdata?
+  phase4  0x1153D8A-0x11542F5  calls=39
+      4x 0x01127F80  helper (6x)
+      3x 0x01143F60  fn size=116
+      3x 0x00141040  fn size=241
+      3x 0x00145D80  helper (6x)
+      3x 0x0013DB60  helper (6x)
+  phase5  0x11542F5-0x115485F  calls=25
+      4x 0x010FB420  fn size=35
+      3x 0x003859C0  helper (called 10x)
+      3x 0x00BA53C0  outside_pdata?
+      2x 0x0162CFA0  fn size=773
+      1x 0x01263C50  fn size=1255
+  phase6  0x115485F-0x1154DCA  calls=26
+      17x 0x0110AD20  tiny counter/clear ([rcx+8])
+      3x 0x001BC2F0  tiny leaf size=22
+      2x 0x01011AD0  fn size=166
+      1x 0x0107C040  outside_pdata?
+      1x 0x00BA53C0  outside_pdata?
+  phase7  0x1154DCA-0x1155335  calls=31
+      3x 0x00145D80  helper (6x)
+      3x 0x0013DB60  helper (6x)
+      2x 0x0036DD40  fn size=200
+      2x 0x0188B130  outside_pdata?
+      2x 0x01A249F0  16-way jump dispatcher (job/type switch)
+
+== String-ish rip refs from Simulate ==
+  @0x1152C13  "Array index out of range"
+  @0x1153471  "uVSs"
+  @0x11538E0  "uSens"
+  @0x1153AE0  "SUPERFLUSH Pre-Report:"
+  @0x1153B91  "SUPERFLUSH freed %s"
+  @0x1153BC1  "SUPERFLUSH Post-Report:"
+  @0x1153C1C  "Loading screen closed"
+  @0x1154037  "internal"
+  @0x1154FCB  "Warning: Hash of %s is wrong."
+
+== Peek: 16-way dispatcher ==
+  01A249F0: mov rax, rcx
+  01A249F3: lea r10, [rip - 0x1a249fa]
+  01A249FA: cmp r8, 0xf
+  01A249FE: ja 0x141a24b10
+  01A24A04: nop word ptr [rax + rax]
+  01A24A10: mov r9d, dword ptr [r10 + r8*4 + 0x1db4d20]
+  01A24A18: add r9, r10
+  01A24A1B: jmp r9
+  01A24A1E: ret 
+  01A24A1F: nop 
+  01A24A20: mov r8, qword ptr [rdx]
+  01A24A23: mov ecx, dword ptr [rdx + 8]
+== Peek: 0x1260C00 large subsystem ==
+  01260C00: mov rax, rsp
+  01260C03: mov qword ptr [rax + 0x10], rbx
+  01260C07: push rbp
+  01260C08: push rsi
+  01260C09: push rdi
+  01260C0A: lea rbp, [rsp - 0x70]
+  01260C0F: sub rsp, 0x170
+  01260C16: mov r9, qword ptr [rcx + 0xac8]
+  01260C1D: xorps xmm0, xmm0
+  01260C20: movaps xmmword ptr [rax - 0x28], xmm6
+  01260C24: xorps xmm2, xmm2
+  01260C27: movaps xmmword ptr [rax - 0x38], xmm7
+  01260C2B: mov rsi, r8
+  01260C2E: movaps xmmword ptr [rax - 0x48], xmm8
+== Peek: 0x110AD20 tiny clear ==
+  0110AD20: push rbx
+  0110AD22: sub rsp, 0x30
+  0110AD26: movsxd rax, dword ptr [rcx + 8]
+  0110AD2A: mov qword ptr [rsp + 0x48], rbp
+  0110AD2F: xor ebp, ebp
+  0110AD31: mov qword ptr [rsp + 0x28], rdi
+== Peek: 0x3859C0 (10x) ==
+  003859C0: mov qword ptr [rsp + 8], rbx
+  003859C5: mov qword ptr [rsp + 0x10], rbp
+  003859CA: push rdi
+  003859CB: sub rsp, 0x20
+  003859CF: mov rdx, qword ptr [rcx]
+  003859D2: mov rdi, rcx
+  003859D5: test rdx, rdx
+  003859D8: je 0x1403859e6
+  003859DA: mov rcx, qword ptr [rip + 0x1de85cf]
+  003859E1: call 0x140385b30

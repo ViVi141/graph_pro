@@ -1,0 +1,79 @@
+## ParallelFor sync call site in simstep
+  011555E4: sbb bh, ch
+  011555E6: and bh, bh
+  011555E8: lea rax, [rip + 0xb39c89]
+  011555EF: mov qword ptr [rsp + 0x30], rax
+  011555F4: lea rdx, [rsp + 0x30]
+  011555F9: lea rax, [rbp + 0x10c8]
+  01155600: mov qword ptr [rsp + 0x38], rax
+  01155605: lea rcx, [rsp + 0x50]
+  0115560A: lea rax, [rsp + 0x70]
+  0115560F: mov qword ptr [rsp + 0x40], rax
+  01155614: mov rax, qword ptr [rsi]
+  01155617: mov qword ptr [rsp + 0x50], rax
+  0115561C: movsxd rax, dword ptr [rdi]
+  0115561F: mov qword ptr [rsp + 0x58], rax
+  01155624: call 0x1410fce10 <<<
+  01155629: mov rcx, qword ptr [rip + 0x1018980]
+  01155630: lea rdx, [rsp + 0x70]
+  01155635: call 0x14013e2b0
+  0115563A: movss xmm1, dword ptr [rbp + 0x10c8]
+  01155642: lea rcx, [rbx + 0x3810]
+  01155649: call 0x141005c90
+  0115564E: lea rcx, [rbp - 0x78]
+
+## Hot callee profiles
+### 0x10FCE10 size=1731
+  strings: ['ParallelFor sync', 'pFor', 'subSync', 'ParallelFor Subdivide']
+  top callees:
+    2x 0x384500 sz=None  []
+    2x 0x384670 sz=None  []
+    1x 0x188C9A0 sz=78  []
+    1x 0x385220 sz=None  []
+    1x 0x384480 sz=None  []
+    1x 0x1A25090 sz=904  []
+    1x 0x384490 sz=None  []
+    1x 0x383DB0 sz=83  []
+
+### 0x1133850 size=204
+  strings: []
+  top callees:
+    4x 0x11259D0 sz=130  []
+    4x 0x10FBC80 sz=35  []
+
+### 0x1108700 size=477
+  strings: []
+  top callees:
+    2x 0x1A249F0 sz=1645  []
+    1x 0x277240 sz=25  []
+
+### 0x115B980 size=296
+  strings: []
+  top callees:
+    4x 0x1133850 sz=204  []
+    2x 0x1120540 sz=22  []
+    2x 0x1159340 sz=297  []
+
+### 0x110BA80 size=217
+  strings: []
+  top callees:
+    1x 0x1636710 sz=28  []
+    1x 0x16365A0 sz=35  []
+
+### 0x11258E0 size=240
+  strings: []
+  top callees:
+
+### 0xE777A0 size=150
+  strings: []
+  top callees:
+    1x 0xE77CF0 sz=100  []
+    1x 0xE77AA0 sz=89  []
+
+### 0xE77000 size=76
+  strings: []
+  top callees:
+
+## indirect calls vs ParallelFor position
+  ParallelFor @ 0x1155624
+  indirect before=0 after=30 total=30

@@ -1,0 +1,125 @@
+# ParallelFor xref
+
+## strings
+  b'ParallelFor sync' -> ['0x1a91470']
+  b'ParallelFor Subdivide' -> ['0x1a900c8']
+  b'ParallelFor' -> ['0x1a900a8', '0x1a900c8', '0x1a91470', '0x211b7ca']
+  b'pFor' -> ['0x1a91484', '0x1b5e683', '0x1b5e6de', '0x1b6899d', '0x1b689ac', '0x1bc9d18', '0x1bc9d28', '0x1c58ba3']
+  b'subSync' -> ['0x1a90058']
+  b'ParallelForEach' -> ['0x211b7ca']
+
+## callers of sync 0x10FCE10: 1
+  @1155624 own=0x1155340 sz=4604 in_simstep=True in_Simulate=False
+  unique owners:
+    1x from 0x1155340 sz=4604 strs=['mtVehS']
+
+## simstep calls BEFORE ParallelFor sync
+  sync_site=0x1155624
+  @1155363 -> 0x188C9A0 sz=78 strs=[]
+  @11553BD -> 0x11259D0 sz=130 strs=[]
+  @11553D8 -> 0x350EF0 sz=None strs=[]
+  @11553EA -> 0x1120E90 sz=56 strs=[]
+  @1155405 -> 0x350EF0 sz=None strs=[]
+  @1155417 -> 0x1120FF0 sz=56 strs=[]
+  @115541F -> 0x114F370 sz=13 strs=[]
+  @1155428 -> 0x385E40 sz=None strs=[]
+  @115544C -> 0x445540 sz=None strs=[]
+  @115545E -> 0x446130 sz=None strs=[]
+  @115546E -> 0x11258E0 sz=240 strs=[]
+  @115547F -> 0x7C1DA0 sz=56 strs=[]
+  @11554B4 -> 0x10FB530 sz=33 strs=[]
+  @11554E4 -> 0x10FB530 sz=33 strs=[]
+  @1155510 -> 0x10FB530 sz=33 strs=[]
+  @115552E -> 0x10FB530 sz=33 strs=[]
+  @115555D -> 0x10FB530 sz=33 strs=[]
+  @1155587 -> 0x110F254 sz=None strs=[]
+  @11555E3 -> 0x384500 sz=None strs=[]
+
+## functions referencing ParallelFor-related strings
+  string b'ParallelFor Subdivide' @ 0x1a900c8
+    xref @13EA18 own=0x13E8F0 sz=618
+    xref @13EA17 own=0x13E8F0 sz=618
+    xref @14EB8B own=0x14E680 sz=1932
+    xref @14EB8A own=0x14E680 sz=1932
+    xref @36CDBB own=0x36C8E0 sz=1884
+    xref @36CDBA own=0x36C8E0 sz=1884
+    xref @666B73 own=0x666670 sz=1918
+    xref @666B72 own=0x666670 sz=1918
+    xref @7C9B92 own=0x7C9770 sz=1695
+    xref @7C9B91 own=0x7C9770 sz=1695
+    xref @B45D68 own=0xB45C40 sz=618
+    xref @B45D67 own=0xB45C40 sz=618
+  string b'ParallelFor sync' @ 0x1a91470
+    xref @14E7C2 own=0x14E680 sz=1932
+    xref @14E7C1 own=0x14E680 sz=1932
+    xref @36CA29 own=0x36C8E0 sz=1884
+    xref @36CA28 own=0x36C8E0 sz=1884
+    xref @6667B2 own=0x666670 sz=1918
+    xref @6667B1 own=0x666670 sz=1918
+    xref @7C98AC own=0x7C9770 sz=1695
+    xref @7C98AB own=0x7C9770 sz=1695
+    xref @B58E06 own=0xB582E0 sz=4028
+    xref @B58E05 own=0xB582E0 sz=4028
+    xref @10FCF5A own=0x10FCE10 sz=1731
+    xref @10FCF59 own=0x10FCE10 sz=1731
+  string b'pFor' @ 0x1a91484
+    xref @14E973 own=0x14E680 sz=1932
+    xref @14E972 own=0x14E680 sz=1932
+    xref @36CBB0 own=0x36C8E0 sz=1884
+    xref @36CBAF own=0x36C8E0 sz=1884
+    xref @666961 own=0x666670 sz=1918
+    xref @666960 own=0x666670 sz=1918
+    xref @7C99C3 own=0x7C9770 sz=1695
+    xref @7C99C2 own=0x7C9770 sz=1695
+    xref @10FD0E0 own=0x10FCE10 sz=1731
+    xref @10FD0DF own=0x10FCE10 sz=1731
+    xref @1349BE1 own=0x13498F0 sz=1918
+    xref @1349BE0 own=0x13498F0 sz=1918
+
+## sync fn 0x10FCE10 outline (first 40 ins + string sites)
+  010FCE10: mov qword ptr [rsp + 0x10], rdx
+  010FCE15: push rbp
+  010FCE16: push rbx
+  010FCE17: push rsi
+  010FCE18: push rdi
+  010FCE19: push r12
+  010FCE1B: push r13
+  010FCE1D: push r14
+  010FCE1F: push r15
+  010FCE21: mov eax, 0x14b8
+  010FCE26: call 0x14188c9a0
+  010FCE2B: sub rsp, rax
+  010FCE2E: lea rbp, [rsp + 0x30]
+  010FCE33: mov rax, qword ptr [rcx + 8]
+  010FCE37: mov r14, rdx
+  010FCE3A: mov rbx, rcx
+  010FCE3D: cmp rax, 2
+  010FCE41: jae 0x1410fcec4
+  010FCE47: mov rbx, qword ptr [rcx]
+  010FCE4A: movabs rsi, 0x7fffffffffffffff
+  010FCE54: lea rdi, [rbx + rax*8]
+  010FCE58: cmp rbx, rdi
+  010FCE5B: je 0x1410fce88
+  010FCE5D: nop dword ptr [rax]
+  010FCE60: mov rax, qword ptr [r14]
+  010FCE63: test rax, rax
+  010FCE66: js 0x1410fce6d
+  010FCE68: mov rcx, r14
+  010FCE6B: jmp 0x1410fce76
+  010FCE6D: mov rcx, rax
+  010FCE70: and rcx, rsi
+  010FCE73: mov rax, qword ptr [rcx]
+  010FCE76: xor r8d, r8d
+  010FCE79: mov rdx, rbx
+  010FCE7C: call qword ptr [rax + 8]
+  010FCE7F: add rbx, 8
+  010FCE83: cmp rbx, rdi
+  010FCE86: jne 0x1410fce60
+  010FCE88: mov r8, qword ptr [r14]
+  010FCE8B: test r8, r8
+  010FCE8E: je 0x1410fd4bf
+  010FCE94: js 0x1410fcea8
+  010FCE96: xor edx, edx
+  010FCE98: mov rcx, r14
+  010FCE9B: call qword ptr [r8]
+  010FCE9E: xor edi, edi

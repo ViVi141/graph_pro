@@ -1,0 +1,222 @@
+# Simulate P0/P1 continuation
+
+## P0 large callees — rip strings
+### 0x11456D0 (large_A) size=5433
+  (no rip strings)
+
+### 0x1155340 (large_B) size=4604
+  @11555BD 'mtVehS'
+  @11564DC '{error} Strange - simulation started twice in a frame?'
+
+### 0x11566C0 (large_C) size=2104
+  (no rip strings)
+
+### 0x1260C00 (subsys_ac8) size=2595
+  (no rip strings)
+
+### 0x1263C50 (subsys_near_ac8) size=1255
+  @1263E96 'sligt'
+
+## P0 caller functions — rip strings (context)
+### caller/nearby 0x112BA30 size=2172
+  @112BA5C 'CfgWorlds'
+  @112BA88 'DefaultWorld'
+  @112BAA2 'skyTexture'
+  @112BAE7 'skyTextureR'
+  @112BD6F '.p3d'
+  @112BEAA 'bis_buldozer_cursor'
+  @112BFD4 'scripts\\editor.sqs'
+  @112C0F9 'scripts\\initBuldozer.sqf'
+
+### caller/nearby 0x112C780 size=2528
+  @112C7A1 'startWeather'
+  @112C7FD 'forecastWeather'
+  @112C840 'startFog'
+  @112C883 'forecastFog'
+  @112C8C6 'startFogBase'
+  @112C909 'forecastFogBase'
+  @112C951 'startFogDecay'
+  @112C9BE 'forecastFogDecay'
+  @112CA06 'fogBeta0Min'
+  @112CA63 'fogBeta0Max'
+  @112CAA6 'startWind'
+  @112CAE9 'startWaves'
+  @112CB2C 'forecastWind'
+  @112CB6F 'forecastWaves'
+  @112CCBA 'startTime'
+  @112CCF9 'startDate'
+  @112CD50 '1/1/2000'
+  @112CD73 '0:00'
+  @112CEFF 'SpriteRefractionPars'
+  @112CF2A 'refractScale'
+  @112CF54 'timeScale'
+  @112CFAE 'DOFPars'
+
+### caller/nearby 0x112C2B0 size=1218
+  @112C5BE 'CfgWorlds'
+  @112C67E 'AmbientA3'
+
+### caller/nearby 0x114B0DA size=12797
+  @114B1BC 'worldName'
+  @114B2FE 'addons'
+  @114B45E 'Landscape'
+  @114B4AD 'userMission'
+  @114B4FF 'directory'
+  @114B572 'subdirectory'
+  @114B5C2 'mission'
+  @114B611 'missionParameters'
+  @114B65F 'missionDisplayName'
+  @114B6A3 'filenameReal'
+  @114B6E8 'missionSteamId'
+  @114B7B3 'CfgWorlds'
+  @114BC13 'CustomRadio%d'
+
+### caller/nearby 0x112410C size=1561
+
+### caller/nearby 0x16107C0 size=2700
+
+## P0 global string → code xref (selected)
+### string b'startWeather'  rvas=['0x1bcbbf0']
+  xref code@0xCC98BD own=0xCC98B0 in_Simulate=False
+  xref code@0xCC98BC own=0xCC98B0 in_Simulate=False
+  xref code@0xCD32CF own=0xCD2F4B in_Simulate=False
+  xref code@0xCD32CE own=0xCD2F4B in_Simulate=False
+  xref code@0x112C7A2 own=0x112C780 in_Simulate=False
+  xref code@0x112C7A1 own=0x112C780 in_Simulate=False
+
+### string b'CfgWorlds'  rvas=['0x1b0b718', '0x1b0d38d', '0x1b3b1a0']
+
+### string b'worldName'  rvas=['0x1b5d3ad', '0x1b66ce8']
+  xref code@0x88E06F own=0x88C7D0 in_Simulate=False
+  xref code@0x88E06E own=0x88C7D0 in_Simulate=False
+  xref code@0x1130B16 own=0x1130560 in_Simulate=False
+  xref code@0x1130B15 own=0x1130560 in_Simulate=False
+  xref code@0x114AFA1 own=0x114AF2C in_Simulate=False
+  xref code@0x114AFA0 own=0x114AF2C in_Simulate=False
+  xref code@0x114B1BD own=0x114B0DA in_Simulate=False
+  xref code@0x114B1BC own=0x114B0DA in_Simulate=False
+  xref code@0x11E0188 own=0x11DFFB0 in_Simulate=False
+  xref code@0x11E0187 own=0x11DFFB0 in_Simulate=False
+
+### string b'mtVehS'  rvas=['0x1c8e3b0']
+  xref code@0x11555BE own=0x1155340 in_Simulate=False
+  xref code@0x11555BD own=0x1155340 in_Simulate=False
+
+### string b'SUPERFLUSH'  rvas=['0x1c8de40', '0x1c8de58', '0x1c8de70']
+  xref code@0x1153AE1 own=0x11527E0 in_Simulate=True
+  xref code@0x1153AE0 own=0x11527E0 in_Simulate=True
+  xref code@0x1153B92 own=0x11527E0 in_Simulate=True
+  xref code@0x1153B91 own=0x11527E0 in_Simulate=True
+
+### string b'Loading screen closed'  rvas=['0x1c8de88']
+  xref code@0x1153C1D own=0x11527E0 in_Simulate=True
+  xref code@0x1153C1C own=0x11527E0 in_Simulate=True
+
+### string b'PerformAI'  rvas=['0x2154d86']
+
+### string b'JobFuture'  rvas=['0x2154e0c', '0x2154e9c', '0x2154fb0']
+
+### string b'InvokerLambda'  rvas=['0x211b686', '0x211b716', '0x211b7a6']
+
+## P1 Simulate — call timeline of interest
+### direct calls to large/known
+  0x1152C47: call 0x1A249F0 
+  0x1152CF2: call 0x1A249F0 
+  0x1153052: call 0x1155340 large_B
+  0x11533C3: call 0x112F8B0 
+  0x11533FB: call 0x112F8B0 
+  0x1153525: call 0x3859C0 
+  0x11536FD: call 0x3859C0 
+  0x115373F: call 0x1260C00 subsys_ac8
+  0x1153979: call 0x11566C0 large_C
+  0x1153988: call 0x3859C0 
+  0x1153A14: call 0x3859C0 
+  0x1153A35: call 0x3859C0 
+  0x1153A3D: call 0x112F8B0 
+  0x1153A84: call 0x112F8B0 
+  0x1153C53: call 0x1139AA0 
+  0x1153D04: call 0x1260C00 subsys_ac8
+  0x1153DD5: call 0x11456D0 large_A
+  0x1153DE1: call 0x3859C0 
+  0x1154290: call 0x11456D0 large_A
+  0x11542D7: call 0x1260C00 subsys_ac8
+  0x11542F7: call 0x1263C50 subsys_near_ac8
+  0x115432D: call 0x1260C00 subsys_ac8
+  0x1154498: call 0x3859C0 
+  0x11544A4: call 0x3859C0 
+  0x1154579: call 0x3859C0 
+  0x1154A65: call 0x110AD20 
+  0x1154A71: call 0x110AD20 
+  0x1154A7D: call 0x110AD20 
+  0x1154A89: call 0x110AD20 
+  0x1154A95: call 0x110AD20 
+  0x1154AA1: call 0x110AD20 
+  0x1154AAD: call 0x110AD20 
+  0x1154AB9: call 0x110AD20 
+  0x1154AC5: call 0x110AD20 
+  0x1154AD1: call 0x110AD20 
+  0x1154ADD: call 0x110AD20 
+  0x1154AE9: call 0x110AD20 
+  0x1154AF5: call 0x110AD20 
+  0x1154B01: call 0x110AD20 
+  0x1154B0D: call 0x110AD20 
+  0x1154B19: call 0x110AD20 
+  0x1154B25: call 0x110AD20 
+  0x1154F63: call 0x1A249F0 
+  0x11550C9: call 0x1A249F0 
+  0x1155200: call 0x3859C0 
+
+### indirect calls (vtable/job) count by proximity phase
+  phase0: 6 indirect calls
+  phase1: 12 indirect calls
+  phase2: 18 indirect calls
+  phase3: 12 indirect calls
+  phase4: 10 indirect calls
+  phase5: 20 indirect calls
+  phase6: 17 indirect calls
+  phase7: 12 indirect calls
+  total indirect: 107
+  first/last few:
+    0x1152947
+    0x1152958
+    0x1152993
+    0x11529BF
+    0x1152B41
+    0x1152CD2
+    0x1152D89
+    0x1152DC6
+    0x11551C3
+    0x11551E2
+    0x115521F
+    0x115523E
+
+### Simulate refs to job-related RTTI/strings
+  RTTI with b'SoundMainTask': 1
+    0x21548E0 sim_xrefs=0 all=0
+      .?AVSoundMainTask@?1??Simulate@World@@
+  RTTI with b'InvokerLambda': 363
+    0x211B680 sim_xrefs=0 all=0
+      .?AU?$InvokerLambda@V<lambda_1>@?6??Process@SensorPositionChecker@@QEAAXXZ@X_KAEAUSharedData@?6??23@
+    0x211B710 sim_xrefs=0 all=0
+      .?AU?$InvokerLambda@V<lambda_3>@?6??Process@SensorPositionChecker@@QEAAXXZ@X_KAEAUSharedData@?6??23@
+    0x211B7A0 sim_xrefs=0 all=0
+      .?AU?$InvokerLambda@V<lambda_1>@?5??Run@?$ParallelForEachAtomicCounter@USharedData@?6??Process@Senso
+    0x211BDF0 sim_xrefs=0 all=0
+      .?AU?$InvokerLambda@V<lambda_1>@?1??Initialize@ExportJIP_messagesPerObject@@QEAAXAEAV?$AutoArray@USe
+  RTTI with b'JobFuture': 3
+    0x2154DC0 sim_xrefs=0 all=0
+      .?AU?$InvokerLambda@V<lambda_1>@?1??SimulateCloudletsAndSound@World@@QEAA?AVJobFuture@enf@@MPEAVIMic
+    0x2154E50 sim_xrefs=0 all=0
+      .?AU?$InvokerLambda@V<lambda_3>@?7??SimulateCloudletsAndSound@World@@QEAA?AVJobFuture@enf@@MPEAVIMic
+    0x2154F60 sim_xrefs=0 all=0
+      .?AU?$InvokerLambda@V<lambda_1>@?BC@??PrepareDrawPrepareCloudlets@World@@QEAA?AVJobFuture@enf@@XZ@X$
+  RTTI with b'PrepareDrawPrepareCloudlets': 1
+    0x2154F60 sim_xrefs=0 all=0
+      .?AU?$InvokerLambda@V<lambda_1>@?BC@??PrepareDrawPrepareCloudlets@World@@QEAA?AVJobFuture@enf@@XZ@X$
+
+## P0/P1 working names (inferred)
+- 0x1260C00: called from startWeather/CfgWorlds-bearing fns → **World weather / environment tick candidate** (World+0xAC8 object)
+- 0x11456D0: called from CfgWorlds/worldName-bearing fns → **World config / world-state maintenance candidate**
+- 0x1155340: unique to Simulate; string mtVehS nearby in earlier scan → **vehicle-related sim step candidate** (confirm)
+- 0x11566C0: sits next to SUPERFLUSH / Loading screen closed → **memory/stream flush / load-state transition**
+- Indirect calls spread across all phases → continuous vtable/job use; not a single wait site

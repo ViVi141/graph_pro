@@ -1,0 +1,51 @@
+# Render RTTI xref — Arma3_x64.exe
+# ImageBase 0x140000000
+
+## RTTI name hits
+- 0x21548E0  .?AVSoundMainTask@?1??Simulate@World@@
+- 0x2154CA0  .?AU?$InvokerLambda@V<lambda_1>@?HA@??Simulate@World@@QEAAXMAEA_N0@Z@XI@@
+- 0x2154D00  .?AU?$InvokerLambda@V<lambda_2>@?1??Simulate@World@@QEAAXMAEA_N0@Z@XI@@
+- 0x2154F60  .?AU?$InvokerLambda@V<lambda_1>@?BC@??PrepareDrawPrepareCloudlets@World@@QEAA?AVJobFuture@enf@@XZ@X$$V@@
+- 0x2154FE0  .?AU?$InvokerLambda@V<lambda_1>@?1???R1?HA@??Simulate@World@@QEAAXMAEA_N0@Z@QEBA@I@Z@_NPEAVEntity@@@@
+- 0x2157770  .?AU?$InvokerLambda@V<lambda_1>@?1??SelectActiveAggLights@Scene@@QEAAXPEAVObject@@@Z@XV?$Span@V?$Link@VLight@@@@@@AEAV?$AutoArray@ULightPtrW
+- 0x2160FA0  .?AU?$WorkerThread@URenderCBToPlay@EngineDD11@DX11@@$0BAAAA@$02@EngineDD11@DX11@@
+- 0x2161A20  .?AU?$InvokerLambda@V<lambda_1>@?4??GetDriverVersion@EngineDD11@DX11@@AEBAIAEBUDXGI_ADAPTER_DESC@@AEAV?$RStringCT@D@@AEA_N@Z@X$$V@@
+- 0x2161AC0  .?AU?$InvokerLambda@V<lambda_2>@?BB@??GetDriverVersion@EngineDD11@DX11@@AEBAIAEBUDXGI_ADAPTER_DESC@@AEAV?$RStringCT@D@@AEA_N@Z@X$$V@@
+- 0x2161B60  .?AU?$InvokerLambda@V<lambda_3>@?BP@??GetDriverVersion@EngineDD11@DX11@@AEBAIAEBUDXGI_ADAPTER_DESC@@AEAV?$RStringCT@D@@AEA_N@Z@X$$V@@
+- 0x2161C00  .?AU?$ParamsFunctor@V<lambda_1>@?1??Init@?$WorkerThread@URenderCBToPlay@EngineDD11@DX11@@$0BAAAA@$02@EngineDD11@DX11@@QEAAXKP6AKPEAX@Z0HW4Th
+
+## .text refs to selected name RVAs (ilen=7, capped)
+
+### .?AVSoundMainTask@?1??Simulate@World@@
+name_rva=0x21548E0 refs=0 owning_funcs=0
+
+### .?AU?$InvokerLambda@V<lambda_1>@?HA@??Simulate@World@@QEAAXMAEA_N0@Z@XI@@
+name_rva=0x2154CA0 refs=0 owning_funcs=0
+
+### .?AU?$InvokerLambda@V<lambda_2>@?1??Simulate@World@@QEAAXMAEA_N0@Z@XI@@
+name_rva=0x2154D00 refs=0 owning_funcs=0
+
+### .?AU?$InvokerLambda@V<lambda_1>@?BC@??PrepareDrawPrepareCloudlets@World@@QEAA?AVJobFuture@enf@@XZ@X$
+name_rva=0x2154F60 refs=0 owning_funcs=0
+
+### .?AU?$InvokerLambda@V<lambda_1>@?1???R1?HA@??Simulate@World@@QEAAXMAEA_N0@Z@QEBA@I@Z@_NPEAVEntity@@@
+name_rva=0x2154FE0 refs=0 owning_funcs=0
+
+### .?AU?$InvokerLambda@V<lambda_1>@?1??SelectActiveAggLights@Scene@@QEAAXPEAVObject@@@Z@XV?$Span@V?$Lin
+name_rva=0x2157770 refs=0 owning_funcs=0
+
+### .?AU?$WorkerThread@URenderCBToPlay@EngineDD11@DX11@@$0BAAAA@$02@EngineDD11@DX11@@
+name_rva=0x2160FA0 refs=0 owning_funcs=0
+
+### .?AU?$ParamsFunctor@V<lambda_1>@?1??Init@?$WorkerThread@URenderCBToPlay@EngineDD11@DX11@@$0BAAAA@$02
+name_rva=0x2161C00 refs=1 owning_funcs=1
+  caller_func 0x8AD3D6
+
+## Gate-2 interpretation
+- `DX11::EngineDD11` appears with PP/R2T parameter types and `RenderCBToPlay` worker —
+  render command buffers are played on a worker thread, not only on the Present thread.
+- `World::PrepareDrawPrepareCloudlets` is jobified (`JobFuture`) — draw prep is async.
+- `Scene::SelectActiveAggLights` is the CPU light-selection entry; sun direction for
+  contact shadows should be hunted from buffers it fills, not from PP VS cb (240 B quads).
+- Immediate-context Draw hooks seeing only count=4 quads is consistent with geometry
+  being recorded into deferred CBs / another context and replayed later.

@@ -1,0 +1,24 @@
+version=54;
+class Mission
+{
+    class Intel
+    {
+        briefingName="GP Server CPU Test";
+        author="GraphPro";
+        year=2035;
+        month=7;
+        day=12;
+        hour=12;
+        minute=0;
+        startWeather=0.25;
+        forecastWeather=0.25;
+        startWind=0.1;
+        forecastWind=0.1;
+        startWaves=0.1;
+        forecastWaves=0.1;
+    };
+    class Entities
+    {
+        items=0;
+    };
+};

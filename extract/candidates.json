@@ -1,0 +1,261 @@
+[
+ {
+  "rva": 22937008,
+  "size": 316,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 33
+ },
+ {
+  "rva": 18065408,
+  "size": 181,
+  "copy_len": 7,
+  "calls": 1,
+  "simd": 12
+ },
+ {
+  "rva": 17045216,
+  "size": 34,
+  "copy_len": 8,
+  "calls": 0,
+  "simd": 4
+ },
+ {
+  "rva": 17045920,
+  "size": 34,
+  "copy_len": 8,
+  "calls": 0,
+  "simd": 4
+ },
+ {
+  "rva": 18193856,
+  "size": 53,
+  "copy_len": 5,
+  "calls": 0,
+  "simd": 4
+ },
+ {
+  "rva": 16849616,
+  "size": 166,
+  "copy_len": 5,
+  "calls": 0,
+  "simd": 3
+ },
+ {
+  "rva": 17912016,
+  "size": 92,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 3
+ },
+ {
+  "rva": 18188368,
+  "size": 41,
+  "copy_len": 8,
+  "calls": 0,
+  "simd": 3
+ },
+ {
+  "rva": 23138896,
+  "size": 37,
+  "copy_len": 11,
+  "calls": 0,
+  "simd": 3
+ },
+ {
+  "rva": 17989504,
+  "size": 142,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 2
+ },
+ {
+  "rva": 18061984,
+  "size": 83,
+  "copy_len": 11,
+  "calls": 0,
+  "simd": 2
+ },
+ {
+  "rva": 22938496,
+  "size": 41,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 2
+ },
+ {
+  "rva": 1222976,
+  "size": 57,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 1301344,
+  "size": 141,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 1323344,
+  "size": 59,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 1422464,
+  "size": 67,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 1591696,
+  "size": 51,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 3190080,
+  "size": 55,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 3338928,
+  "size": 88,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 3602160,
+  "size": 49,
+  "copy_len": 6,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 3606736,
+  "size": 49,
+  "copy_len": 8,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 3693360,
+  "size": 124,
+  "copy_len": 6,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 3769104,
+  "size": 59,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 3769168,
+  "size": 59,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 3770720,
+  "size": 59,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 4485344,
+  "size": 94,
+  "copy_len": 8,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 4670896,
+  "size": 190,
+  "copy_len": 5,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 7117568,
+  "size": 59,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 17074832,
+  "size": 84,
+  "copy_len": 6,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 17363888,
+  "size": 76,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 17806368,
+  "size": 35,
+  "copy_len": 5,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 17810656,
+  "size": 42,
+  "copy_len": 5,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 17973408,
+  "size": 72,
+  "copy_len": 5,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 18084176,
+  "size": 33,
+  "copy_len": 6,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 19280096,
+  "size": 42,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 0
+ },
+ {
+  "rva": 19547200,
+  "size": 41,
+  "copy_len": 5,
+  "calls": 0,
+  "simd": 0
+ },
+ {
+  "rva": 23135696,
+  "size": 85,
+  "copy_len": 5,
+  "calls": 1,
+  "simd": 0
+ }
+]

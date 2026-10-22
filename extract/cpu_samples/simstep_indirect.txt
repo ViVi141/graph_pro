@@ -1,0 +1,199 @@
+# simstep indirect calls  STEP=0x1155340  PF_site=0x1155624
+# total=30 after_pf=30
+
+## groups (kind, base, slot/disp) after ParallelFor
+   8x  mem  base=rax slot=0x2A0
+   8x  reg  base=r12 slot=None
+   6x  reg  base=r15 slot=None
+   2x  mem  base=rax slot=0x8
+   1x  rip  base=rip slot=0x1A888D8
+   1x  mem  base=rax slot=0x210
+   1x  mem  base=rax slot=0x48
+   1x  mem  base=rax slot=0x18
+   1x  rip  base=rip slot=0x1A888E8
+   1x  mem  base=rax slot=0x20
+
+## sites (after ParallelFor only)
+[00] RVA=0x115573C sz=6 raw=ff90a0020000  call qword ptr [rax + 0x2a0]  kind=mem slot=0x2A0
+      | 0115572D: test byte ptr [rdi + 0x1cd], 0x20
+      | 01155734: jne 0x141155759
+      | 01155736: mov rax, qword ptr [rdi]
+      | 01155739: mov rcx, rdi
+
+[01] RVA=0x1155756 sz=3 raw=41ffd4  call r12  kind=reg slot=-
+      | 01155746: lea rcx, [rdi + r15]
+      | 0115574A: mov byte ptr [rdi + 0x1cc], al
+      | 01155750: xor r8d, r8d
+      | 01155753: movaps xmm1, xmm6
+
+[02] RVA=0x11557BF sz=6 raw=ff90a0020000  call qword ptr [rax + 0x2a0]  kind=mem slot=0x2A0
+      | 011557B0: test byte ptr [rdi + 0x1cd], 0x20
+      | 011557B7: jne 0x1411557e0
+      | 011557B9: mov rax, qword ptr [rdi]
+      | 011557BC: mov rcx, rdi
+
+[03] RVA=0x11557DD sz=3 raw=41ffd4  call r12  kind=reg slot=-
+      | 011557C9: lea rcx, [rdi + r15]
+      | 011557CD: mov byte ptr [rdi + 0x1cc], 1
+      | 011557D4: mov r8d, 1
+      | 011557DA: movaps xmm1, xmm6
+
+[04] RVA=0x115584F sz=6 raw=ff90a0020000  call qword ptr [rax + 0x2a0]  kind=mem slot=0x2A0
+      | 01155840: test byte ptr [rdi + 0x1cd], 0x20
+      | 01155847: jne 0x141155870
+      | 01155849: mov rax, qword ptr [rdi]
+      | 0115584C: mov rcx, rdi
+
+[05] RVA=0x115586D sz=3 raw=41ffd4  call r12  kind=reg slot=-
+      | 01155859: lea rcx, [rdi + r15]
+      | 0115585D: mov byte ptr [rdi + 0x1cc], 2
+      | 01155864: mov r8d, 2
+      | 0115586A: movaps xmm1, xmm6
+
+[06] RVA=0x11558DF sz=6 raw=ff90a0020000  call qword ptr [rax + 0x2a0]  kind=mem slot=0x2A0
+      | 011558D0: test byte ptr [rdi + 0x1cd], 0x20
+      | 011558D7: jne 0x141155900
+      | 011558D9: mov rax, qword ptr [rdi]
+      | 011558DC: mov rcx, rdi
+
+[07] RVA=0x11558FD sz=3 raw=41ffd4  call r12  kind=reg slot=-
+      | 011558E9: lea rcx, [rdi + r15]
+      | 011558ED: mov byte ptr [rdi + 0x1cc], 3
+      | 011558F4: mov r8d, 3
+      | 011558FA: movaps xmm1, xmm6
+
+[08] RVA=0x115596F sz=6 raw=ff90a0020000  call qword ptr [rax + 0x2a0]  kind=mem slot=0x2A0
+      | 01155960: test byte ptr [rdi + 0x1cd], 0x20
+      | 01155967: jne 0x14115598c
+      | 01155969: mov rax, qword ptr [rdi]
+      | 0115596C: mov rcx, rdi
+
+[09] RVA=0x1155989 sz=3 raw=41ffd4  call r12  kind=reg slot=-
+      | 01155979: lea rcx, [rdi + r15]
+      | 0115597D: mov byte ptr [rdi + 0x1cc], al
+      | 01155983: xor r8d, r8d
+      | 01155986: movaps xmm1, xmm6
+
+[10] RVA=0x11559EF sz=6 raw=ff90a0020000  call qword ptr [rax + 0x2a0]  kind=mem slot=0x2A0
+      | 011559E0: test byte ptr [rdi + 0x1cd], 0x20
+      | 011559E7: jne 0x141155a10
+      | 011559E9: mov rax, qword ptr [rdi]
+      | 011559EC: mov rcx, rdi
+
+[11] RVA=0x1155A0D sz=3 raw=41ffd4  call r12  kind=reg slot=-
+      | 011559F9: lea rcx, [rdi + r15]
+      | 011559FD: mov byte ptr [rdi + 0x1cc], 1
+      | 01155A04: mov r8d, 1
+      | 01155A0A: movaps xmm1, xmm6
+
+[12] RVA=0x1155A7F sz=6 raw=ff90a0020000  call qword ptr [rax + 0x2a0]  kind=mem slot=0x2A0
+      | 01155A70: test byte ptr [rdi + 0x1cd], 0x20
+      | 01155A77: jne 0x141155aa0
+      | 01155A79: mov rax, qword ptr [rdi]
+      | 01155A7C: mov rcx, rdi
+
+[13] RVA=0x1155A9D sz=3 raw=41ffd4  call r12  kind=reg slot=-
+      | 01155A89: lea rcx, [rdi + r15]
+      | 01155A8D: mov byte ptr [rdi + 0x1cc], 2
+      | 01155A94: mov r8d, 2
+      | 01155A9A: movaps xmm1, xmm6
+
+[14] RVA=0x1155B0F sz=6 raw=ff90a0020000  call qword ptr [rax + 0x2a0]  kind=mem slot=0x2A0
+      | 01155B00: test byte ptr [rdi + 0x1cd], 0x20
+      | 01155B07: jne 0x141155b30
+      | 01155B09: mov rax, qword ptr [rdi]
+      | 01155B0C: mov rcx, rdi
+
+[15] RVA=0x1155B2D sz=3 raw=41ffd4  call r12  kind=reg slot=-
+      | 01155B19: lea rcx, [rdi + r15]
+      | 01155B1D: mov byte ptr [rdi + 0x1cc], 3
+      | 01155B24: mov r8d, 3
+      | 01155B2A: movaps xmm1, xmm6
+
+[16] RVA=0x1155E37 sz=6 raw=ff159b2a9300  call qword ptr [rip + 0x932a9b]  kind=rip slot=0x1A888D8
+      | 01155E23: call 0x140fd85b0
+      | 01155E28: test al, al
+      | 01155E2A: je 0x141155ef1
+      | 01155E30: lea rcx, [rip + 0x10bd2b1]
+
+[17] RVA=0x1155E78 sz=6 raw=ff9010020000  call qword ptr [rax + 0x210]  kind=mem slot=0x210
+      | 01155E6E: je 0x141155e80
+      | 01155E70: mov rax, qword ptr [r14]
+      | 01155E73: mov dl, 1
+      | 01155E75: mov rcx, r14
+
+[18] RVA=0x1155EB9 sz=3 raw=ff5048  call qword ptr [rax + 0x48]  kind=mem slot=0x48
+      | 01155EAA: mov rdx, qword ptr [rsi + 0x310]
+      | 01155EB1: test rdx, rdx
+      | 01155EB4: je 0x141155ee2
+      | 01155EB6: mov rax, qword ptr [rcx]
+
+[19] RVA=0x1155EDF sz=3 raw=ff5018  call qword ptr [rax + 0x18]  kind=mem slot=0x18
+      | 01155ED4: je 0x141155ee2
+      | 01155ED6: mov rax, qword ptr [rcx]
+      | 01155ED9: xor r8d, r8d
+      | 01155EDC: mov rdx, qword ptr [rdi]
+
+[20] RVA=0x1155EE9 sz=6 raw=ff15f9299300  call qword ptr [rip + 0x9329f9]  kind=rip slot=0x1A888E8
+      | 01155ED9: xor r8d, r8d
+      | 01155EDC: mov rdx, qword ptr [rdi]
+      | 01155EDF: call qword ptr [rax + 0x18]
+      | 01155EE2: lea rcx, [rip + 0x10bd1ff]
+
+[21] RVA=0x1155F14 sz=3 raw=ff5008  call qword ptr [rax + 8]  kind=mem slot=0x8
+      | 01155F07: lock xadd dword ptr [rcx + 8], eax
+      | 01155F0C: cmp eax, 1
+      | 01155F0F: jne 0x141155f26
+      | 01155F11: mov rax, qword ptr [rcx]
+
+[22] RVA=0x1155F84 sz=3 raw=ff5008  call qword ptr [rax + 8]  kind=mem slot=0x8
+      | 01155F77: lock xadd dword ptr [rcx + 8], eax
+      | 01155F7C: cmp eax, 1
+      | 01155F7F: jne 0x141155f87
+      | 01155F81: mov rax, qword ptr [rcx]
+
+[23] RVA=0x115609A sz=3 raw=41ffd7  call r15  kind=reg slot=-
+      | 01156089: lea rcx, [rdx + r14]
+      | 0115608D: mov byte ptr [rdx + 0x1cc], 0
+      | 01156094: xor r8d, r8d
+      | 01156097: movaps xmm1, xmm7
+
+[24] RVA=0x115611D sz=3 raw=41ffd7  call r15  kind=reg slot=-
+      | 01156109: lea rcx, [rdx + r14]
+      | 0115610D: mov byte ptr [rdx + 0x1cc], 1
+      | 01156114: mov r8d, 1
+      | 0115611A: movaps xmm1, xmm7
+
+[25] RVA=0x115618D sz=3 raw=41ffd7  call r15  kind=reg slot=-
+      | 01156179: lea rcx, [rdx + r14]
+      | 0115617D: mov byte ptr [rdx + 0x1cc], 2
+      | 01156184: mov r8d, 2
+      | 0115618A: movaps xmm1, xmm7
+
+[26] RVA=0x11561FD sz=3 raw=41ffd7  call r15  kind=reg slot=-
+      | 011561E9: lea rcx, [rdx + r14]
+      | 011561ED: mov byte ptr [rdx + 0x1cc], 3
+      | 011561F4: mov r8d, 3
+      | 011561FA: movaps xmm1, xmm7
+
+[27] RVA=0x115626A sz=3 raw=41ffd7  call r15  kind=reg slot=-
+      | 01156259: lea rcx, [rdx + r14]
+      | 0115625D: mov byte ptr [rdx + 0x1cc], 0
+      | 01156264: xor r8d, r8d
+      | 01156267: movaps xmm1, xmm7
+
+[28] RVA=0x11562DD sz=3 raw=41ffd7  call r15  kind=reg slot=-
+      | 011562C9: lea rcx, [rdx + r14]
+      | 011562CD: mov byte ptr [rdx + 0x1cc], 1
+      | 011562D4: mov r8d, 1
+      | 011562DA: movaps xmm1, xmm7
+
+[29] RVA=0x11564D0 sz=3 raw=ff5020  call qword ptr [rax + 0x20]  kind=mem slot=0x20
+      | 011564C1: mov rcx, qword ptr [rbx + 0xbc8]
+      | 011564C8: test rcx, rcx
+      | 011564CB: je 0x1411564d3
+      | 011564CD: mov rax, qword ptr [rcx]
+
+## size histogram (after PF)
+  sz=3: 19  (need-steal)
+  sz=6: 11  (E8-fit)

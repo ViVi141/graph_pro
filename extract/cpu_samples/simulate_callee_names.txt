@@ -1,0 +1,111 @@
+# Simulate large-callee naming
+# ImageBase 0x140000000
+
+## 0x011456D0  pdata_size=5433  owner=0x11456D0
+  RTTI refs: (none in first 4KB rip-rel)
+  strings: (none)
+  .text callers found: 11 (capped)
+    from fn 0x1123885 size=863  
+    from fn 0x112BA30 size=2172  CfgWorlds
+    from fn 0x112E05D size=118  
+    from fn 0x11396E0 size=166  
+    from fn 0x1139FBF size=1350  
+    from fn 0x114B0DA size=12797  worldName
+    from fn 0x11527E0 size=11093  
+    from fn 0x128C43F size=372  
+
+## 0x01155340  pdata_size=4604  owner=0x1155340
+  RTTI refs: (none in first 4KB rip-rel)
+  strings:
+    - 'mtVehS'
+  .text callers found: 1 (capped)
+    from fn 0x11527E0 size=11093  
+
+## 0x011566C0  pdata_size=2104  owner=0x11566C0
+  RTTI refs: (none in first 4KB rip-rel)
+  strings: (none)
+  .text callers found: 1 (capped)
+    from fn 0x11527E0 size=11093  
+
+## 0x01260C00  pdata_size=2595  owner=0x1260C00
+  RTTI refs: (none in first 4KB rip-rel)
+  strings: (none)
+  .text callers found: 17 (capped)
+    from fn 0x1123885 size=863  
+    from fn 0x112410C size=1561  
+    from fn 0x112C2B0 size=1218  CfgWorlds
+    from fn 0x112C780 size=2528  startWeather
+    from fn 0x112D160 size=822  
+    from fn 0x114B0DA size=12797  worldName
+    from fn 0x11527E0 size=11093  
+    from fn 0x16107C0 size=2700  
+
+## 0x01263C50  pdata_size=1255  owner=0x1263C50
+  RTTI refs: (none in first 4KB rip-rel)
+  strings:
+    - 'sligt'
+  .text callers found: 2 (capped)
+    from fn 0x1123BE4 size=443  
+    from fn 0x11527E0 size=11093  
+
+## 0x01A249F0  pdata_size=1645  owner=0x1A249F0
+  RTTI refs: (none in first 4KB rip-rel)
+  strings: (none)
+  .text callers found: 30 (capped)
+    from fn 0x12728C size=413  
+    from fn 0x1276A0 size=394  
+    from fn 0x127A40 size=603  
+    from fn 0x129C55 size=87  
+    from fn 0x12C6F8 size=146  
+    from fn 0x12F690 size=952  
+    from fn 0x130CB0 size=146  
+    from fn 0x131F9C size=491  
+    from fn 0x1321D0 size=5006  d:\Bis\Source\Stable\Futura\lib\AddonLoading.cpp
+    from fn 0x133A7E size=160  
+    from fn 0x134EA0 size=11853  CfgPatches
+    from fn 0x13A129 size=86  
+
+## 0x0110AD20  pdata_size=10  owner=0x110AD20
+  RTTI refs: (none in first 4KB rip-rel)
+  strings: (none)
+  .text callers found: 30 (capped)
+    from fn 0x110B910 size=217  
+    from fn 0x1139FBF size=1350  
+
+## 0x003859C0  pdata_size=154  owner=0x3859C0
+  RTTI refs: (none in first 4KB rip-rel)
+  strings: (none)
+  .text callers found: 17 (capped)
+    from fn 0x1123885 size=863  
+    from fn 0x112E130 size=2558  CfgSites
+    from fn 0x112F610 size=181  
+    from fn 0x113978E size=238  
+    from fn 0x1139FBF size=1350  
+    from fn 0x113DB84 size=1154  
+    from fn 0x11527E0 size=11093  
+    from fn 0x115F1F0 size=64  
+
+## Heuristic: RTTI names near absolute address of callee
+  ptrs to 0x11456D0: 0  rvas=[]
+  ptrs to 0x1155340: 0  rvas=[]
+  ptrs to 0x11566C0: 0  rvas=[]
+  ptrs to 0x1260C00: 0  rvas=[]
+  ptrs to 0x1263C50: 0  rvas=[]
+
+## RTTI keywords near engine (sample)
+  Simulate         14
+  PerformAI        1
+  Landscape        17
+  Visib            17
+  Occlusion        2
+  Phys             33
+  Anim             162
+  Entity           97
+  Scene            10
+  Sound            111
+  Network          67
+  Clutter          11
+  Shadow           18
+  PrepareDraw      1
+  Flush            0
+  SUPER            0
