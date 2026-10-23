@@ -1,0 +1,11 @@
+﻿{
+    "Variant":  "skill_low",
+    "Skill":  0.1,
+    "Waypoints":  true,
+    "Vehicles":  0,
+    "Groups":  48,
+    "Total":  28738,
+    "ExeFn":  548,
+    "ExePct":  2.0948,
+    "PhysXPct":  0.0035
+}

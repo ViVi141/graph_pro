@@ -1,0 +1,11 @@
+﻿{
+    "Variant":  "physx_on",
+    "Skill":  0.5,
+    "Waypoints":  true,
+    "Vehicles":  24,
+    "Groups":  24,
+    "Total":  29394,
+    "ExeFn":  312,
+    "ExePct":  1.1975,
+    "PhysXPct":  0.017
+}

@@ -1,0 +1,46 @@
+n_frames=36
+params_br=0.006364
+params_contrast=0.984077
+params_saturation=1.014909
+params_gamma=1.349000
+pool_rmse=0.115722
+mad_mean_raw=23.7679
+mad_mean_fit=17.3744
+mad_closed_pct=26.90
+frames_mad_fit_gt8=25
+frame[0] idx=162 t=2.70 mad_raw=17.713 mad_fit=9.887
+frame[1] idx=229 t=3.82 mad_raw=17.242 mad_fit=9.138
+frame[2] idx=297 t=4.95 mad_raw=0.032 mad_fit=3.460
+frame[3] idx=365 t=6.08 mad_raw=4.024 mad_fit=13.216
+frame[4] idx=433 t=7.22 mad_raw=6.328 mad_fit=17.611
+frame[5] idx=501 t=8.35 mad_raw=5.729 mad_fit=18.217
+frame[6] idx=569 t=9.48 mad_raw=5.976 mad_fit=18.810
+frame[7] idx=637 t=10.62 mad_raw=6.226 mad_fit=19.037
+frame[8] idx=705 t=11.75 mad_raw=6.697 mad_fit=20.030
+frame[9] idx=772 t=12.87 mad_raw=6.463 mad_fit=19.311
+frame[10] idx=840 t=14.00 mad_raw=6.876 mad_fit=18.857
+frame[11] idx=908 t=15.13 mad_raw=16.182 mad_fit=10.556
+frame[12] idx=976 t=16.27 mad_raw=16.334 mad_fit=11.088
+frame[13] idx=1044 t=17.40 mad_raw=16.257 mad_fit=11.027
+frame[14] idx=1112 t=18.53 mad_raw=16.173 mad_fit=10.686
+frame[15] idx=1180 t=19.67 mad_raw=16.173 mad_fit=10.908
+frame[16] idx=1248 t=20.80 mad_raw=14.769 mad_fit=12.275
+frame[17] idx=1316 t=21.93 mad_raw=23.709 mad_fit=22.347
+frame[18] idx=1383 t=23.05 mad_raw=20.679 mad_fit=13.296
+frame[19] idx=1451 t=24.18 mad_raw=24.476 mad_fit=19.296
+frame[20] idx=1519 t=25.32 mad_raw=61.531 mad_fit=55.188
+frame[21] idx=1587 t=26.45 mad_raw=22.460 mad_fit=21.484
+frame[22] idx=1655 t=27.58 mad_raw=18.615 mad_fit=16.073
+frame[23] idx=1723 t=28.72 mad_raw=17.368 mad_fit=13.270
+frame[24] idx=1791 t=29.85 mad_raw=15.867 mad_fit=10.673
+frame[25] idx=1859 t=30.98 mad_raw=20.734 mad_fit=17.808
+frame[26] idx=1927 t=32.12 mad_raw=20.255 mad_fit=14.886
+frame[27] idx=1994 t=33.23 mad_raw=23.283 mad_fit=14.609
+frame[28] idx=2062 t=34.37 mad_raw=25.079 mad_fit=14.205
+frame[29] idx=2130 t=35.50 mad_raw=26.927 mad_fit=14.686
+frame[30] idx=2198 t=36.63 mad_raw=27.348 mad_fit=12.752
+frame[31] idx=2266 t=37.77 mad_raw=14.394 mad_fit=12.042
+frame[32] idx=2334 t=38.90 mad_raw=50.264 mad_fit=41.923
+frame[33] idx=2402 t=40.03 mad_raw=32.637 mad_fit=21.316
+frame[34] idx=2470 t=41.17 mad_raw=27.108 mad_fit=15.005
+frame[35] idx=2538 t=42.30 mad_raw=25.577 mad_fit=16.960

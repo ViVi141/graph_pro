@@ -1,0 +1,11 @@
+﻿{
+    "Variant":  "wp_cycle",
+    "Skill":  0.5,
+    "Waypoints":  true,
+    "Vehicles":  0,
+    "Groups":  48,
+    "Total":  28706,
+    "ExeFn":  557,
+    "ExePct":  2.1529,
+    "PhysXPct":  0
+}

@@ -1,0 +1,24 @@
+{
+  "metric": "gpsample exe_fn / exe module pct (NOT diag_fps)",
+  "sample_sec_approx": 65,
+  "interval_ms": 50,
+  "levers": [
+    {"name": "ai_count", "points": [
+      {"nGroups": 0, "exe_fn": 17, "exe_pct": 0.07},
+      {"nGroups": 16, "exe_fn": 196, "exe_pct": 0.73},
+      {"nGroups": 48, "exe_fn": 570, "exe_pct": 2.20}
+    ], "verdict": "GO"},
+    {"name": "setSkill", "points": [
+      {"skill": 0.1, "nGroups": 48, "exe_fn": 548, "exe_pct": 2.0948},
+      {"skill": 1.0, "nGroups": 48, "exe_fn": 536, "exe_pct": 2.1048}
+    ], "verdict": "NO-GO"},
+    {"name": "waypoints_move", "points": [
+      {"waypoints": false, "disableAI_PATH": true, "exe_fn": 152, "exe_pct": 0.6499},
+      {"waypoints": "CYCLE", "exe_fn": 557, "exe_pct": 2.1529}
+    ], "verdict": "GO"},
+    {"name": "physx_light_vehicles", "points": [
+      {"vehicles": 0, "nGroups": 24, "exe_fn": 276, "exe_pct": 1.0945, "physx_pct": 0.0035},
+      {"vehicles": 24, "nGroups": 24, "exe_fn": 312, "exe_pct": 1.1975, "physx_pct": 0.017}
+    ], "verdict": "WEAK"}
+  ]
+}

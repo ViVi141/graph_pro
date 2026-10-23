@@ -64,9 +64,11 @@ player enableSimulation false;
 uiSleep 4.0;
 
 diag_log format ["[GP] atl=%1 dir=%2 cam=%3 fps=%4", getPosATL player, getDir player, cameraView, diag_fps];
-screenshot "gp_r_baseline.png";
+// Unique names avoid overwrite lock when Cursor/explorer has gp_r_baseline.png open.
+private _tag = format ["gp_r_%1", floor diag_tickTime];
+screenshot format ["%1.png", _tag];
 uiSleep 1.2;
-screenshot "gp_r_baseline_b.png";
-diag_log "[GP] done";
+screenshot format ["%1_b.png", _tag];
+diag_log format ["[GP] done shots=%1", _tag];
 
 player enableSimulation true;

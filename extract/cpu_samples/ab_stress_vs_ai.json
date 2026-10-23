@@ -1,0 +1,31 @@
+﻿[
+    {
+        "Tag":  "ai_default_48",
+        "Ticks":  1,
+        "FpsMean":  28.62,
+        "WorkMsMean":  null,
+        "Sample":  [
+                       " 2:43:23 \"[GP] tick=2 units=193 fps=28.4698\"",
+                       " 2:43:28 \"[GP] tick=3 units=193 fps=28.6225\""
+                   ]
+    },
+    {
+        "Tag":  "ai_zero",
+        "Ticks":  2,
+        "FpsMean":  27.69,
+        "WorkMsMean":  null,
+        "Sample":  [
+                       " 2:44:04 \"[GP] tick=3 units=1 fps=27.1647\"",
+                       " 2:44:09 \"[GP] tick=4 units=1 fps=28.2187\""
+                   ]
+    },
+    {
+        "Tag":  "script_stress",
+        "Ticks":  0,
+        "FpsMean":  0,
+        "WorkMsMean":  null,
+        "Sample":  {
+
+                   }
+    }
+]

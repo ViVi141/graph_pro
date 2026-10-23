@@ -1,0 +1,5 @@
+delta=262
+delta_s=4.3667
+overlap_s=184.400
+align_err=9.599064
+mean_mad=19.957

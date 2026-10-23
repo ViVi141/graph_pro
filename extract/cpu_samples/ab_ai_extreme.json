@@ -1,0 +1,20 @@
+﻿[
+    {
+        "Tag":  "zero",
+        "N":  0,
+        "Spawn":  " 2:40:36 \"[GP] spawning groups=0 x 4 around [15360,15360,0]\"",
+        "Ticks":  4,
+        "Units":  1,
+        "FpsMean":  27.69,
+        "Rpt":  "arma3server_x64_2026-10-24_02-40-23.rpt"
+    },
+    {
+        "Tag":  "xhigh",
+        "N":  96,
+        "Spawn":  " 2:41:35 \"[GP] spawning groups=96 x 4 around [15360,15360,0]\"",
+        "Ticks":  3,
+        "Units":  385,
+        "FpsMean":  29.38,
+        "Rpt":  "arma3server_x64_2026-10-24_02-41-22.rpt"
+    }
+]

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YAAB 滑动对比 · 注入 vs 原版</title>
+  <style>
+    :root {
+      --bg: #0e0f12;
+      --panel: #17191e;
+      --text: #e8eaef;
+      --muted: #9aa3b2;
+      --accent: #e8b84a;
+      --inject: #5ec8ff;
+      --line: #f2f4f8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(1200px 600px at 50% -10%, #1a2030 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.45rem;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
+    .sub {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+    .stage-wrap {
+      background: var(--panel);
+      border: 1px solid #2a2e38;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+    }
+    .stage {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border-radius: 8px;
+      background: #000;
+      cursor: ew-resize;
+      user-select: none;
+      touch-action: none;
+    }
+    .stage video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+      background: #000;
+    }
+    #vid-vanilla { z-index: 1; }
+    #vid-inject {
+      z-index: 2;
+      /* reveal left portion = inject */
+      clip-path: inset(0 50% 0 0);
+    }
+    .divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 3px;
+      margin-left: -1.5px;
+      background: var(--line);
+      z-index: 5;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+      pointer-events: none;
+    }
+    .divider::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 36px;
+      height: 36px;
+      margin: -18px 0 0 -18px;
+      border-radius: 50%;
+      background: var(--line);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.45);
+      background-image:
+        linear-gradient(#222, #222),
+        linear-gradient(#222, #222);
+      background-size: 2px 12px, 12px 2px;
+      background-position: center, center;
+      background-repeat: no-repeat;
+    }
+    .tag {
+      position: absolute;
+      top: 14px;
+      z-index: 6;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+    }
+    .tag-inject {
+      left: 14px;
+      color: #041018;
+      background: color-mix(in srgb, var(--inject) 88%, white);
+    }
+    .tag-vanilla {
+      right: 14px;
+      color: #111;
+      background: rgba(230, 232, 236, 0.9);
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 16px;
+      align-items: center;
+      margin-top: 14px;
+    }
+    button {
+      appearance: none;
+      border: 1px solid #3a4150;
+      background: #222833;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    .slider-row {
+      flex: 1 1 220px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 200px;
+    }
+    .slider-row label {
+      color: var(--muted);
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    .time {
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      font-size: 0.85rem;
+      min-width: 7.5rem;
+    }
+    .hint {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .err {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #3a1f1f;
+      color: #ffc9c9;
+      font-size: 0.88rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>YAAB 滑动对比</h1>
+    <p class="sub">
+      左：注入（ACES / amb / expo）· 右：原版 · 已按 注入31s≈原版35s 精修对齐（Δ≈4.37s）<br />
+      拖拽画面或下方滑条切换分界；空格播放/暂停。
+    </p>
+
+    <div class="stage-wrap">
+      <div class="stage" id="stage" aria-label="视频滑动对比区域">
+        <video id="vid-vanilla" muted playsinline preload="auto"
+               src="yaab-sync-vanilla.mp4"></video>
+        <video id="vid-inject" muted playsinline preload="auto"
+               src="yaab-sync-inject.mp4"></video>
+        <div class="divider" id="divider"></div>
+        <span class="tag tag-inject">注入</span>
+        <span class="tag tag-vanilla">原版</span>
+      </div>
+
+      <div class="controls">
+        <button type="button" id="btn-play">播放</button>
+        <button type="button" id="btn-restart">重头</button>
+        <div class="slider-row">
+          <label for="wipe">分界</label>
+          <input id="wipe" type="range" min="0" max="100" value="50" />
+        </div>
+        <div class="slider-row">
+          <label for="seek">进度</label>
+          <input id="seek" type="range" min="0" max="1000" value="0" />
+        </div>
+        <span class="time" id="time">0:00 / 0:00</span>
+      </div>
+      <div class="err" id="err"></div>
+    </div>
+
+    <p class="hint">
+      若视频无法播放：在本目录执行
+      <code>python -m http.server 8765</code>
+      后打开 <code>http://localhost:8765/yaab-slider-compare.html</code>。
+      需要 H.264 时可把两段 <code>yaab-sync-*.mp4</code> 转码为浏览器友好编码。
+    </p>
+  </main>
+
+  <script>
+    const inj = document.getElementById("vid-inject");
+    const van = document.getElementById("vid-vanilla");
+    const stage = document.getElementById("stage");
+    const divider = document.getElementById("divider");
+    const wipe = document.getElementById("wipe");
+    const seek = document.getElementById("seek");
+    const btnPlay = document.getElementById("btn-play");
+    const btnRestart = document.getElementById("btn-restart");
+    const timeEl = document.getElementById("time");
+    const errEl = document.getElementById("err");
+
+    let scrubbing = false;
+    let playing = false;
+
+    function setWipe(pct) {
+      const p = Math.min(100, Math.max(0, pct));
+      wipe.value = String(p);
+      inj.style.clipPath = `inset(0 ${100 - p}% 0 0)`;
+      divider.style.left = `${p}%`;
+    }
+
+    function fmt(t) {
+      if (!Number.isFinite(t)) return "0:00";
+      const s = Math.floor(t % 60).toString().padStart(2, "0");
+      return `${Math.floor(t / 60)}:${s}`;
+    }
+
+    function syncFrom(master) {
+      const t = master.currentTime;
+      const other = master === inj ? van : inj;
+      if (Math.abs(other.currentTime - t) > 0.05) other.currentTime = t;
+      if (!scrubbing && Number.isFinite(master.duration) && master.duration > 0) {
+        seek.value = String(Math.round((t / master.duration) * 1000));
+      }
+      timeEl.textContent = `${fmt(t)} / ${fmt(master.duration || 0)}`;
+    }
+
+    async function playBoth() {
+      try {
+        await Promise.all([inj.play(), van.play()]);
+        playing = true;
+        btnPlay.textContent = "暂停";
+      } catch (e) {
+        showErr("无法自动播放，请点击播放。若仍失败请用本地 http.server 打开。");
+      }
+    }
+
+    function pauseBoth() {
+      inj.pause();
+      van.pause();
+      playing = false;
+      btnPlay.textContent = "播放";
+    }
+
+    function showErr(msg) {
+      errEl.style.display = "block";
+      errEl.textContent = msg;
+    }
+
+    btnPlay.addEventListener("click", () => {
+      if (playing) pauseBoth();
+      else playBoth();
+    });
+    btnRestart.addEventListener("click", () => {
+      inj.currentTime = 0;
+      van.currentTime = 0;
+      syncFrom(inj);
+    });
+
+    wipe.addEventListener("input", () => setWipe(Number(wipe.value)));
+    seek.addEventListener("pointerdown", () => { scrubbing = true; });
+    seek.addEventListener("pointerup", () => { scrubbing = false; });
+    seek.addEventListener("input", () => {
+      const d = inj.duration || van.duration;
+      if (!d) return;
+      const t = (Number(seek.value) / 1000) * d;
+      inj.currentTime = t;
+      van.currentTime = t;
+    });
+
+    inj.addEventListener("timeupdate", () => syncFrom(inj));
+    van.addEventListener("timeupdate", () => syncFrom(van));
+    inj.addEventListener("ended", pauseBoth);
+    van.addEventListener("ended", pauseBoth);
+
+    inj.addEventListener("error", () => showErr("注入视频加载失败（编码可能不被浏览器支持）。"));
+    van.addEventListener("error", () => showErr("原版视频加载失败（编码可能不被浏览器支持）。"));
+
+    // drag on stage
+    function pctFromEvent(ev) {
+      const r = stage.getBoundingClientRect();
+      const x = ("touches" in ev ? ev.touches[0].clientX : ev.clientX) - r.left;
+      return (x / r.width) * 100;
+    }
+    let dragging = false;
+    stage.addEventListener("pointerdown", (ev) => {
+      dragging = true;
+      stage.setPointerCapture(ev.pointerId);
+      setWipe(pctFromEvent(ev));
+    });
+    stage.addEventListener("pointermove", (ev) => {
+      if (!dragging) return;
+      setWipe(pctFromEvent(ev));
+    });
+    stage.addEventListener("pointerup", () => { dragging = false; });
+    stage.addEventListener("pointercancel", () => { dragging = false; });
+
+    window.addEventListener("keydown", (ev) => {
+      if (ev.code === "Space") {
+        ev.preventDefault();
+        if (playing) pauseBoth();
+        else playBoth();
+      }
+    });
+
+    setWipe(50);
+    Promise.all([
+      new Promise((r) => inj.addEventListener("loadedmetadata", r, { once: true })),
+      new Promise((r) => van.addEventListener("loadedmetadata", r, { once: true })),
+    ]).then(() => {
+      syncFrom(inj);
+    });
+  </script>
+</body>
+</html>

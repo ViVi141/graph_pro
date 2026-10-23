@@ -1,0 +1,23 @@
+﻿[
+    {
+        "Tag":  "idle0",
+        "Total":  "30496",
+        "ExeFn":  "17",
+        "ExeLine":  "22 0.0721 arma3server_x64.exe",
+        "Ntdll":  "30462 99.8885 ntdll.dll"
+    },
+    {
+        "Tag":  "ai48",
+        "Total":  "28480",
+        "ExeFn":  "570",
+        "ExeLine":  "627 2.2015 arma3server_x64.exe",
+        "Ntdll":  "27835 97.7353 ntdll.dll"
+    },
+    {
+        "Tag":  "stress",
+        "Total":  "29848",
+        "ExeFn":  "27",
+        "ExeLine":  "27 0.0905 arma3server_x64.exe",
+        "Ntdll":  "29811 99.8760 ntdll.dll"
+    }
+]

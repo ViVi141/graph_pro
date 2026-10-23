@@ -1,0 +1,5 @@
+# Rename/copy to GP_probe_mrt.txt in the game directory to enable:
+#   - full-screen RT/DS census -> GP_mrt_census.txt + GP_mrt_<fmt>_<w>x<h>.raw
+#   - depth timeline per DSV  -> GP_depth_timeline.txt + GP_depth_clean_candidate.raw
+# Present contact pass is forced OFF (mode 2) while this file exists.
+1

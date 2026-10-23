@@ -1,0 +1,11 @@
+﻿{
+    "Variant":  "wp_none",
+    "Skill":  0.5,
+    "Waypoints":  false,
+    "Vehicles":  0,
+    "Groups":  48,
+    "Total":  30005,
+    "ExeFn":  152,
+    "ExePct":  0.6499,
+    "PhysXPct":  0.0133
+}

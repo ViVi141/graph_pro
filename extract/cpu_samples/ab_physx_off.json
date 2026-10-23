@@ -1,0 +1,11 @@
+﻿{
+    "Variant":  "physx_off",
+    "Skill":  0.5,
+    "Waypoints":  true,
+    "Vehicles":  0,
+    "Groups":  24,
+    "Total":  28781,
+    "ExeFn":  276,
+    "ExePct":  1.0945,
+    "PhysXPct":  0.0035
+}

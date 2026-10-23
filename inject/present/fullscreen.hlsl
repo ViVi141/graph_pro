@@ -1,12 +1,12 @@
 // GraphPro present pass
 //   mode 0 : contact shadows composited over the finished frame
 //   mode 1 : gray occlusion debug
-//   mode 2 : passthrough / disabled
+//   mode 2 : passthrough / disabled (CPU side; this shader not drawn)
 //   mode 3 : contact + depth thumbnail
 //   mode 4 : red occlusion debug
 //
-// Sky fix: Arma clouds often sit at d≈0.95..0.99 while clear sky is 1.0.
-// Contact is ONLY applied on near ground (low d). Everything else is passthrough.
+// Single RT only (no MRT hist) — dual RT was a black-sky suspect on Arma.
+// Sky/cloud reject: runtime skyThr (g_p1.w) + GROUND_D_MAX.
 struct VSOut
 {
     float4 pos : SV_Position;
@@ -25,8 +25,9 @@ VSOut VSMain(uint id : SV_VertexID)
 cbuffer GPParams : register(b0)
 {
     float4 g_p0;   // x = strength, y = radius metres, z = projection scale, w = mode
-    float4 g_p1;   // xy = texel size, z = jitter, w = skyThr (unused for reject now)
+    float4 g_p1;   // xy = texel size, z = unused, w = skyThr
     float4 g_p2;   // xyz = light dir, w = steps
+    float4 g_p3;   // x = luma0, y = luma1, z = unused, w = unused
 };
 
 SamplerState       g_smp     : register(s0);
@@ -35,34 +36,42 @@ Texture2D<float>   g_depth   : register(t1);
 Texture2DMS<float> g_depthMS : register(t1);
 
 #define NEAR_M 0.1
-// Hard ceiling: never touch pixels that could be cloud/sky/far hills silhouette.
-#define GROUND_D_MAX 0.88
-#define CONTACT_Z_MAX 25.0
+#define GROUND_D_MAX 0.80
+#define CONTACT_Z_MAX 20.0
 
 float Zof(float d)
 {
     return NEAR_M / max(1.0 - d, 0.0000001);
 }
 
+bool IsSkyOrFar(float d)
+{
+    float skyThr = g_p1.w;
+    if (skyThr < 0.5) skyThr = 0.992;
+    if (d >= skyThr) return true;
+    if (d >= GROUND_D_MAX) return true;
+    if (d >= 0.995) return true;
+    return false;
+}
+
 bool IsGroundContactCandidate(float d0)
 {
-    if (d0 >= GROUND_D_MAX) return false;
-    if (d0 >= 0.995) return false;
+    if (IsSkyOrFar(d0)) return false;
     float z = Zof(d0);
     if (z > CONTACT_Z_MAX) return false;
     return true;
 }
 
-float ContactShadow(float2 uv, float d0)
+float ContactShadowRadius(float2 uv, float d0, float radScale)
 {
     float z0 = Zof(d0);
     float2 L = g_p2.xy;
     float llen = length(L);
-    if (llen < 1e-4) return 1.0;
+    if (llen < 1e-4) return 0.0;
     L /= llen;
 
-    float radM = max(g_p0.y, 0.05);
-    float pixR = clamp(radM * g_p0.z / z0, 2.0, 40.0);
+    float radM = max(g_p0.y * radScale, 0.05);
+    float pixR = clamp(radM * g_p0.z / z0, 2.0, 48.0);
     float2 ts = g_p1.xy;
     int steps = (int)clamp(g_p2.w, 4.0, 12.0);
     float occ = 0.0;
@@ -74,16 +83,24 @@ float ContactShadow(float2 uv, float d0)
         float2 ouv = uv + L * (pixR * t) * ts;
         if (any(ouv < 0.0) || any(ouv > 1.0)) break;
         float d1 = g_depth.SampleLevel(g_smp, ouv, 0).r;
-        // Never treat cloud/sky samples as occluders.
-        if (d1 >= GROUND_D_MAX) continue;
+        if (IsSkyOrFar(d1)) continue;
         float z1 = Zof(d1);
         float dz = z0 - z1;
         if (dz <= 0.02) continue;
         float maxDz = radM * (0.35 + 0.65 * t);
         if (dz > maxDz) continue;
-        occ = max(occ, saturate(1.0 - t) * saturate(dz / max(maxDz, 1e-3)));
+        float w = (1.0 - t) * (1.0 - t);
+        float cand = w * saturate(dz / max(maxDz, 1e-3));
+        occ += cand * (1.0 - occ);
     }
-    return saturate(1.0 - occ);
+    return saturate(occ);
+}
+
+float ContactOcclusion(float2 uv, float d0)
+{
+    float fine = ContactShadowRadius(uv, d0, 0.40);
+    float coarse = ContactShadowRadius(uv, d0, 1.00);
+    return max(fine, coarse);
 }
 
 float4 PSComposite(VSOut i) : SV_Target
@@ -92,16 +109,23 @@ float4 PSComposite(VSOut i) : SV_Target
     float4 col = g_color.SampleLevel(g_smp, uv, 0);
     float  d0  = g_depth.SampleLevel(g_smp, uv, 0).r;
 
-    // Default: leave sky/clouds/far completely alone.
-    if (!IsGroundContactCandidate(d0)) return col;
+    // Hard sky gate before any contact math.
+    if (!IsGroundContactCandidate(d0))
+        return col;
 
-    float sh = ContactShadow(uv, d0);
-    if (g_p0.w > 0.5 && g_p0.w < 1.5) return float4(sh, sh, sh, 1.0);
-    if (g_p0.w > 3.5 && g_p0.w < 4.5) {
-        float o = 1.0 - sh;
-        return float4(lerp(col.rgb, float3(1, 0.15, 0.1), o * 0.85), 1.0);
-    }
-    float k = 1.0 - (1.0 - sh) * saturate(g_p0.x);
+    float occ = ContactOcclusion(uv, d0);
+    float sh = saturate(1.0 - occ);
+
+    if (g_p0.w > 0.5 && g_p0.w < 1.5)
+        return float4(sh, sh, sh, 1.0);
+    if (g_p0.w > 3.5 && g_p0.w < 4.5)
+        return float4(lerp(col.rgb, float3(1, 0.15, 0.1), occ * 0.85), 1.0);
+
+    float luma = dot(col.rgb, float3(0.2126, 0.7152, 0.0722));
+    float t0 = g_p3.x;
+    float t1 = max(g_p3.y, t0 + 1e-3);
+    float protect = saturate((luma - t0) / (t1 - t0));
+    float k = 1.0 - occ * saturate(g_p0.x) * protect;
     return float4(col.rgb * k, 1.0);
 }
 

@@ -84,11 +84,16 @@ extract/cpu_samples/timerlog_*.txt
 extract/cpu_samples/indirect_*.txt
 extract/cpu_samples/indirectlog_*.txt
 
-# --- Demo screenshots (large; regenerate via mission) ---
+# --- Demo screenshots / video (large; regenerate via mission/tools) ---
 demo/**/*.png
 demo/**/*.jpg
 demo/**/*.jpeg
+demo/**/*.mp4
+demo/**/*.webm
 demo/_live/
+
+# Regenerable annotate scratch
+extract/cpu_samples/annotated_latest.txt
 
 # --- Local / secrets / game copies ---
 *.mdmp

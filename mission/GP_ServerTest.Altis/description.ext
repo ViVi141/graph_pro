@@ -1,0 +1,13 @@
+author = "GraphPro";
+onLoadName = "GP Server CPU Test";
+onLoadMission = "Headless AI stress for CPU sampling";
+loadScreen = "";
+class Header
+{
+	gameType = Coop;
+	minPlayers = 1;
+	maxPlayers = 1;
+};
+respawn = 3;
+respawnDelay = 5;
+disabledAI = 0;

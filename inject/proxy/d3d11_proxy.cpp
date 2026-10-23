@@ -10,6 +10,7 @@
 #include <cstdarg>
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 #include <string>
 #include <vector>
 #include "../present/fullscreen_shaders.h"
@@ -24,18 +25,40 @@ typedef HRESULT (WINAPI *PFN_CreateDeviceSwap)(IDXGIAdapter*, D3D_DRIVER_TYPE, H
 static PFN_CreateDevice g_createDevice = nullptr;
 static PFN_CreateDeviceSwap g_createDeviceSwap = nullptr;
 
-static float g_specScale = 0.0f;   // dielectric F0, colourless
-static float g_specPower = 24.0f;
+static int   g_specMode = 0;       // 0 = off, 1 = boost existing specular only
+static float g_specBoost = 0.0f;   // multiply existing F0 by (1+boost)
+static float g_specPower = 0.0f;   // 0 = leave power alone; else overwrite f[27]
+static float g_specScale = 0.0f;   // legacy unused (kept for log compat)
 static int   g_specLogs = 0;
 static float g_ambScale = 0.0f;
 static UINT  g_expoSize = 0;      // byte size of PSCB_PostProcess, 0 = disabled
 static float g_expoLo = 0.0f;
 static float g_expoHi = 0.0f;
+static int   g_expoAdapt = 0;     // 1 = modulate hi from frame mean luma
+static float g_expoTarget = 0.55f;
+static float g_expoHiLo = 0.55f;  // hi when frame is bright
+static float g_expoHiHi = 1.10f;  // hi when frame is dark
+static float g_expoHiEff = 1.10f;
+static float g_frameLuma = -1.0f;
 static int   g_expoLogs = 0;
 static UINT  g_cbTrackSize[4] = { 0, 0, 0, 0 };
 static int   g_cbTrackSlot[4] = { -1, -1, -1, -1 };
 static int   g_cbTrackCount[4] = { 0, 0, 0, 0 };
 static int   g_cbTrackLogs[4] = { 0, 0, 0, 0 };
+// CB dump / sun hunt
+static int   g_cbDumpOn = 0;
+static UINT  g_cbDumpMin = 512;
+static UINT  g_cbDumpMax = 4096;
+static int   g_cbDumpEvery = 120;
+static int   g_cbDumpMaxFiles = 64;
+static int   g_cbDumpFiles = 0;
+static int   g_cbDumpFrame = 0;
+// Auto light from bound CB float3
+static int   g_lightAuto = 0;
+static UINT  g_lightBindSize = 0;
+static int   g_lightBindIdx = -1;
+static float g_lightAutoX = 0.35f, g_lightAutoY = -0.75f, g_lightAutoZ = 0.0f;
+static int   g_lightAutoValid = 0;
 static float g_aeScale = 0.0f;
 static float g_tintR = 0.95f;
 static float g_tintB = 1.06f;
@@ -55,6 +78,8 @@ static ID3D11PixelShader* g_ps = nullptr;
 static ID3D11PixelShader* g_psMS = nullptr;
 static ID3D11PixelShader* g_psAO = nullptr;
 static ID3D11SamplerState* g_smp = nullptr;
+static ID3D11BlendState* g_blendOpaque = nullptr;
+static ID3D11DepthStencilState* g_dssNoDepth = nullptr;
 static ID3D11Texture2D* g_colorTex = nullptr;
 static ID3D11ShaderResourceView* g_colorSRV = nullptr;
 static ID3D11Buffer* g_cb = nullptr;
@@ -62,7 +87,9 @@ static bool g_presentReady = false;
 static int g_presentCount = 0;
 static UINT g_bbW = 0;
 static UINT g_bbH = 0;
-static int g_presentMode = 0;      // 0 = contact, 1 = gray debug, 2 = off, 3 = +depth thumb, 4 = red debug
+// Contact shadows SHELVED (2026-10-24): black sky in all scenes; keep code but force off.
+static const bool kContactShelved = true;
+static int g_presentMode = 2;      // 0 = contact, 1 = gray debug, 2 = off, 3 = +depth thumb, 4 = red debug
 static float g_aoStrength = 0.45f;   // v1 ship default (conservative)
 static float g_aoRadius = 1.20f;     // metres
 static float g_aoProjK = 600.0f;     // pixels per metre at 1 m
@@ -70,8 +97,22 @@ static float g_presentFrac = 0.30f;
 static float g_lightX = 0.35f;       // screen-space light dir (toward light)
 static float g_lightY = -0.75f;
 static float g_lightZ = 0.0f;
-static float g_contactSteps = 8.0f;
+static float g_contactSteps = 10.0f;
+static float g_temporalAlpha = 0.35f;
+static float g_lumaProtect0 = 0.05f;
+static float g_lumaProtect1 = 0.18f;
+static float g_depthEps = 0.002f;
+// Temporal history ping-pong (RG16F: occ, depth)
+static ID3D11Texture2D* g_histTex[2] = {};
+static ID3D11RenderTargetView* g_histRTV[2] = {};
+static ID3D11ShaderResourceView* g_histSRV[2] = {};
+static int g_histWrite = 0;
+static int g_histValid = 0;
+static ID3D11Texture2D* g_lumaStaging = nullptr;
 static bool  g_probeOn = false;
+static bool  g_probeMrt = false;     // GP_probe_mrt.txt: RT/DS census + depth timeline
+static int   g_mrtPresentSeq = 0;
+static void  RefreshProbeMrtFlag();
 static long  g_nQuad = 0;            // count==3/4/6 draws (PP fullscreen)
 static long  g_nGeom = 0;            // other index/vertex counts
 static long  g_nDrawImm = 0;
@@ -191,7 +232,105 @@ static bool DisassembleInto(const void* data, size_t len, std::string& out)
     return !out.empty();
 }
 
-// ---------------------------------------------------------------- config
+// ---------------------------------------------------------------- config helpers
+static void ParsePresentLine(FILE* pf)
+{
+    int m = g_presentMode;
+    float st = g_aoStrength, rad = g_aoRadius, th = g_aoProjK, fr = g_presentFrac;
+    float al = g_temporalAlpha, l0 = g_lumaProtect0, l1 = g_lumaProtect1;
+    int got = fscanf(pf, "%d %f %f %f %f %f %f %f", &m, &st, &rad, &th, &fr, &al, &l0, &l1);
+    if (got >= 1) g_presentMode = m;
+    if (got >= 2) g_aoStrength = st;
+    if (got >= 3) g_aoRadius = rad;
+    if (got >= 4) g_aoProjK = th;
+    if (got >= 5) g_presentFrac = fr;
+    if (got >= 6) g_temporalAlpha = al;
+    if (got >= 7) g_lumaProtect0 = l0;
+    if (got >= 8) g_lumaProtect1 = l1;
+    if (kContactShelved && g_presentMode != 2) {
+        static int once = 0;
+        if (!once) { once = 1; Log("[GP] contact SHELVED — forcing present mode 2 (was %d)\n", g_presentMode); }
+        g_presentMode = 2;
+    }
+}
+
+static void ParseSpecFile(FILE* sf)
+{
+    // New: "mode boost [power]"  mode 0=off 1=boost existing
+    // Legacy "0 0" / "scale power" with scale==0 stays off.
+    float a = 0, b = 0, c = 0;
+    int got = fscanf(sf, "%f %f %f", &a, &b, &c);
+    if (got < 1) return;
+    if (a == 0.0f || a == 1.0f) {
+        g_specMode = (int)a;
+        if (got >= 2) g_specBoost = b;
+        if (got >= 3) g_specPower = c;
+        g_specScale = 0.0f;
+    } else {
+        // Legacy dielectric inject — keep disabled path (negative ROI).
+        g_specMode = 0;
+        g_specScale = a;
+        if (got >= 2) g_specPower = b;
+    }
+}
+
+static void ParseLightFile(FILE* lf)
+{
+    char tok[64]{};
+    long pos = ftell(lf);
+    if (fscanf(lf, "%63s", tok) != 1) return;
+    if (_stricmp(tok, "auto") == 0) {
+        g_lightAuto = 1;
+        float st = g_contactSteps;
+        if (fscanf(lf, "%f", &st) == 1) g_contactSteps = st;
+        return;
+    }
+    fseek(lf, pos, SEEK_SET);
+    g_lightAuto = 0;
+    float lx = g_lightX, ly = g_lightY, lz = g_lightZ, st = g_contactSteps;
+    int got = fscanf(lf, "%f %f %f %f", &lx, &ly, &lz, &st);
+    if (got >= 2) { g_lightX = lx; g_lightY = ly; }
+    if (got >= 3) g_lightZ = lz;
+    if (got >= 4) g_contactSteps = st;
+}
+
+static void ParseExpoFile(FILE* ef)
+{
+    unsigned s = 0; float lo = 0.0f, hi = 0.0f;
+    int adapt = 0; float target = g_expoTarget, hiLo = g_expoHiLo, hiHi = g_expoHiHi;
+    int got = fscanf(ef, "%u %f %f %d %f %f %f", &s, &lo, &hi, &adapt, &target, &hiLo, &hiHi);
+    if (got >= 3) { g_expoSize = s; g_expoLo = lo; g_expoHi = hi; g_expoHiEff = hi; }
+    if (got >= 4) g_expoAdapt = adapt;
+    if (got >= 5) g_expoTarget = target;
+    if (got >= 6) g_expoHiLo = hiLo;
+    if (got >= 7) g_expoHiHi = hiHi;
+    if (g_expoAdapt && got < 7) {
+        // Defaults when adapt on but range omitted: squeeze toward darker scenes.
+        g_expoHiLo = hi * 0.50f;
+        g_expoHiHi = hi;
+    }
+}
+
+static void ParseCbDumpFile(FILE* df)
+{
+    int en = 0; unsigned mn = 512, mx = 4096; int every = 120, maxf = 64;
+    int got = fscanf(df, "%d %u %u %d %d", &en, &mn, &mx, &every, &maxf);
+    if (got >= 1) g_cbDumpOn = en;
+    if (got >= 2) g_cbDumpMin = mn;
+    if (got >= 3) g_cbDumpMax = mx;
+    if (got >= 4) g_cbDumpEvery = every > 0 ? every : 120;
+    if (got >= 5) g_cbDumpMaxFiles = maxf > 0 ? maxf : 64;
+}
+
+static void ParseLightBindFile(FILE* bf)
+{
+    unsigned sz = 0; int idx = -1;
+    if (fscanf(bf, "%u %d", &sz, &idx) >= 2 && sz > 0 && idx >= 0) {
+        g_lightBindSize = sz;
+        g_lightBindIdx = idx;
+    }
+}
+
 static void LoadConfig()
 {
     std::string dir = ExeDir();
@@ -211,8 +350,8 @@ static void LoadConfig()
     if (LoadFile(dir + "\\GP_ssao.dxbc", g_ssao)) Log("[GP] ssao replacement %zu bytes\n", g_ssao.size());
     {
         FILE* sf = fopen((dir + "\\GP_spec.txt").c_str(), "r");
-        if (sf) { float s = 0, pw = 24; int got = fscanf(sf, "%f %f", &s, &pw); if (got >= 1) g_specScale = s; if (got >= 2) g_specPower = pw; fclose(sf); }
-        Log("[GP] spec F0 %.2f power %.1f\n", g_specScale, g_specPower);
+        if (sf) { ParseSpecFile(sf); fclose(sf); }
+        Log("[GP] spec mode %d boost %.3f power %.1f\n", g_specMode, g_specBoost, g_specPower);
     }
     {
         FILE* af = fopen((dir + "\\GP_amb.txt").c_str(), "r");
@@ -222,43 +361,42 @@ static void LoadConfig()
     }
     {
         FILE* pf = fopen((dir + "\\GP_present.txt").c_str(), "r");
-        if (pf) {
-            int m = 0; float st = 0.70f, rad = 0.30f, th = 600.0f, fr = 0.30f;
-            int got = fscanf(pf, "%d %f %f %f %f", &m, &st, &rad, &th, &fr);
-            if (got >= 1) g_presentMode = m;
-            if (got >= 2) g_aoStrength = st;
-            if (got >= 3) g_aoRadius = rad;
-            if (got >= 4) g_aoProjK = th;
-            if (got >= 5) g_presentFrac = fr;
-            fclose(pf);
-        }
-        Log("[GP] present mode %d strength %.2f radius_m %.2f projK %.0f frac %.2f\n",
-            g_presentMode, g_aoStrength, g_aoRadius, g_aoProjK, g_presentFrac);
+        if (pf) { ParsePresentLine(pf); fclose(pf); }
+        Log("[GP] present mode %d strength %.2f radius_m %.2f projK %.0f frac %.2f alpha %.2f luma %.3f/%.3f\n",
+            g_presentMode, g_aoStrength, g_aoRadius, g_aoProjK, g_presentFrac,
+            g_temporalAlpha, g_lumaProtect0, g_lumaProtect1);
+    }
+    {
+        FILE* bf = fopen((dir + "\\GP_light_bind.txt").c_str(), "r");
+        if (bf) { ParseLightBindFile(bf); fclose(bf); }
+        if (g_lightBindSize)
+            Log("[GP] light bind size=%u idx=%d\n", g_lightBindSize, g_lightBindIdx);
     }
     {
         FILE* lf = fopen((dir + "\\GP_light.txt").c_str(), "r");
-        if (lf) {
-            float lx = g_lightX, ly = g_lightY, lz = g_lightZ, st = g_contactSteps;
-            int got = fscanf(lf, "%f %f %f %f", &lx, &ly, &lz, &st);
-            fclose(lf);
-            if (got >= 2) { g_lightX = lx; g_lightY = ly; }
-            if (got >= 3) g_lightZ = lz;
-            if (got >= 4) g_contactSteps = st;
-        }
-        Log("[GP] light dir %.3f %.3f %.3f steps %.0f\n", g_lightX, g_lightY, g_lightZ, g_contactSteps);
+        if (lf) { ParseLightFile(lf); fclose(lf); }
+        Log("[GP] light %s dir %.3f %.3f %.3f steps %.0f\n",
+            g_lightAuto ? "auto" : "manual", g_lightX, g_lightY, g_lightZ, g_contactSteps);
     }
     g_probeOn = GetFileAttributesA((dir + "\\GP_probe.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
     if (g_probeOn) Log("[GP] probe mode ON (GP_probe.txt)\n");
+    RefreshProbeMrtFlag();
     {
         FILE* ef = fopen((dir + "\\GP_expo.txt").c_str(), "r");
         if (!ef) Log("[GP] expo cfg: absent\n");
         else {
-            unsigned s = 0; float lo = 0.0f, hi = 0.0f;
-            int got = fscanf(ef, "%u %f %f", &s, &lo, &hi);
+            ParseExpoFile(ef);
             fclose(ef);
-            if (got >= 3) { g_expoSize = s; g_expoLo = lo; g_expoHi = hi; }
-            Log("[GP] expo cfg: got=%d size=%u lo=%.3f hi=%.3f\n", got, g_expoSize, g_expoLo, g_expoHi);
+            Log("[GP] expo cfg: size=%u lo=%.3f hi=%.3f adapt=%d target=%.3f hiRange=%.3f..%.3f\n",
+                g_expoSize, g_expoLo, g_expoHi, g_expoAdapt, g_expoTarget, g_expoHiLo, g_expoHiHi);
         }
+    }
+    {
+        FILE* df = fopen((dir + "\\GP_cb_dump.txt").c_str(), "r");
+        if (df) { ParseCbDumpFile(df); fclose(df); }
+        if (g_cbDumpOn)
+            Log("[GP] cb dump ON min=%u max=%u every=%d maxFiles=%d\n",
+                g_cbDumpMin, g_cbDumpMax, g_cbDumpEvery, g_cbDumpMaxFiles);
     }
 }
 
@@ -330,6 +468,42 @@ static HRESULT STDMETHODCALLTYPE Hook_Map(ID3D11DeviceContext* ctx, ID3D11Resour
     return hr;
 }
 
+static void MaybeDumpCb(const float* f, UINT nbytes, UINT nfloat)
+{
+    if (!g_cbDumpOn || g_cbDumpFiles >= g_cbDumpMaxFiles) return;
+    if (nbytes < g_cbDumpMin || nbytes > g_cbDumpMax) return;
+    g_cbDumpFrame++;
+    if ((g_cbDumpFrame % g_cbDumpEvery) != 0) return;
+
+    char name[96];
+    snprintf(name, sizeof(name), "\\GP_cb_%u_%d.f32", nbytes, g_cbDumpFiles);
+    FILE* raw = fopen((ExeDir() + name).c_str(), "wb");
+    if (raw) {
+        fwrite(f, 4, nfloat, raw);
+        fclose(raw);
+    }
+    FILE* idx = fopen((ExeDir() + "\\GP_cb_index.txt").c_str(), "a");
+    if (idx) {
+        fprintf(idx, "file=%s size=%u nfloat=%u head=", name + 1, nbytes, nfloat);
+        for (UINT k = 0; k < 8 && k < nfloat; k++) fprintf(idx, "%.5f%s", f[k], k + 1 < 8 && k + 1 < nfloat ? "," : "");
+        fprintf(idx, " unit3=");
+        int listed = 0;
+        for (UINT k = 0; k + 2 < nfloat && listed < 8; k++) {
+            float x = f[k], y = f[k + 1], z = f[k + 2];
+            float len = sqrtf(x * x + y * y + z * z);
+            if (len > 0.85f && len < 1.15f) {
+                fprintf(idx, "%u(%.3f,%.3f,%.3f,n=%.3f);", k, x, y, z, len);
+                listed++;
+            }
+        }
+        fprintf(idx, "\n");
+        fclose(idx);
+    }
+    g_cbDumpFiles++;
+    if (g_cbDumpFiles <= 4 || (g_cbDumpFiles % 16) == 0)
+        Log("[GP] cb dump #%d size=%u n=%u\n", g_cbDumpFiles, nbytes, nfloat);
+}
+
 static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resource* res, UINT sub)
 {
     if (res) {
@@ -343,12 +517,8 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                 for (int k = 0; k < nseen; k++) if (seen[k] == g_maps[i].size) { dup = true; break; }
                 if (!dup && nseen < 24) {
                     seen[nseen++] = g_maps[i].size;
-                    // candidate PSCB_PostProcess (cb13): log the slot the tonemap
-                    // uses as exposure, c[37].z == float index 37*4+2 == 150
                     Log("[GP] cb size %u\n", g_maps[i].size);
                 }
-                // Sample by SIZE (identity), on later writes, so the values are
-                // the per-frame post-process constants and not the init zeros.
                 if (g_maps[i].size >= 1024 && g_maps[i].size <= 2048 && n > 160) {
                     int slot = -1;
                     for (int k = 0; k < 4; k++) if (g_cbTrackSize[k] == g_maps[i].size) { slot = k; break; }
@@ -363,45 +533,81 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                         }
                     }
                 }
+                MaybeDumpCb(f, g_maps[i].size, n);
+            }
+            // Capture sun-like float3 from bound lighting CB.
+            if (g_lightBindSize && g_maps[i].size == g_lightBindSize && g_lightBindIdx >= 0
+                && (UINT)(g_lightBindIdx + 2) < n) {
+                float x = f[g_lightBindIdx], y = f[g_lightBindIdx + 1], z = f[g_lightBindIdx + 2];
+                float len = sqrtf(x * x + y * y + z * z);
+                if (len > 0.5f && len < 2.0f) {
+                    g_lightAutoX = x / len;
+                    g_lightAutoY = y / len;
+                    g_lightAutoZ = z / len;
+                    g_lightAutoValid = 1;
+                    static int lightLogs = 0;
+                    if (lightLogs < 6 || (lightLogs % 500) == 0) {
+                        lightLogs++;
+                        Log("[GP] light auto (%.3f %.3f %.3f) from cb size=%u idx=%d\n",
+                            g_lightAutoX, g_lightAutoY, g_lightAutoZ, g_lightBindSize, g_lightBindIdx);
+                    }
+                }
             }
             if (g_expoSize && g_maps[i].size == g_expoSize && n > 151) {
                 static int expoHits = 0;
+                static int expoFpReject = 0;
                 expoHits++;
                 float before = f[150];
-                // Always sample a few hits so GP_shader.log proves size/f150 even when
-                // the value sits inside [lo,hi] and no clamp fires.
+                float hi = g_expoAdapt ? g_expoHiEff : g_expoHi;
+                // Strict fingerprint for PSCB_PostProcess (size 1696 is shared).
+                // Two observed layouts (both share c1.w ≈ 0.4545, c0 ≈ 0):
+                //   A: c37 = (1.0, 0.30, AE, 1.00)
+                //   B: c37 = (1.0, 0.09, AE, 0.75)   // current Eden / alt PP state
+                // Rejects junk (112, 0.4/0.15/0.25, f150=5 without neighbors).
+                const float c37x = f[148], c37y = f[149], c37w = f[151], c1w = f[7];
+                const bool layoutA =
+                    (fabsf(c37y - 0.30f) <= 0.05f) && (fabsf(c37w - 1.00f) <= 0.05f);
+                const bool layoutB =
+                    (fabsf(c37y - 0.09f) <= 0.03f) && (fabsf(c37w - 0.75f) <= 0.05f);
+                const bool fp =
+                    (fabsf(c37x - 1.0f) <= 0.02f) &&
+                    (layoutA || layoutB) &&
+                    (fabsf(c1w - 0.4545f) <= 0.08f) &&
+                    (fabsf(f[0]) <= 1e-3f) && (fabsf(f[1]) <= 1e-3f) &&
+                    (fabsf(f[2]) <= 1e-3f) && (fabsf(f[3]) <= 1e-3f) &&
+                    (before >= 0.05f && before <= 4.0f);
                 if (expoHits <= 4 || (expoHits % 400) == 0) {
-                    Log("[GP] expo hit #%d n=%u f150=%.4f lo=%.3f hi=%.3f\n",
-                        expoHits, n, before, g_expoLo, g_expoHi);
+                    Log("[GP] expo hit #%d n=%u f150=%.4f c37=(%.3f %.3f %.3f %.3f) c1w=%.4f fp=%d hi=%.3f\n",
+                        expoHits, n, before, c37x, c37y, before, c37w, c1w, (int)fp, hi);
                 }
-                // Size 1696 is shared by multiple CBs. Only touch values that look
-                // like an AE/exposure scalar; leave matrix junk (e.g. 112) alone —
-                // clamping those was observed to corrupt sky/atmosphere.
-                const bool plausible = (before >= 0.02f && before <= 8.0f);
-                if (plausible && g_expoHi > g_expoLo) {
-                    float after = before < g_expoLo ? g_expoLo : (before > g_expoHi ? g_expoHi : before);
+                if (!fp) {
+                    expoFpReject++;
+                    if (expoFpReject <= 8 || (expoFpReject % 2000) == 0) {
+                        Log("[GP] expo skip fingerprint f150=%.4f c37=(%.3f %.3f %.3f %.3f) c1w=%.4f\n",
+                            before, c37x, c37y, before, c37w, c1w);
+                    }
+                } else if (hi > g_expoLo) {
+                    float after = before < g_expoLo ? g_expoLo : (before > hi ? hi : before);
                     f[150] = after;
                     if (after != before && g_expoLogs < 12) {
                         g_expoLogs++;
-                        Log("[GP] exposure CLAMPED %.4f -> %.4f (hi %.3f)\n", before, after, g_expoHi);
+                        Log("[GP] exposure CLAMPED %.4f -> %.4f (hi %.3f) fp-ok\n", before, after, hi);
                     }
-                } else if (!plausible && (expoHits <= 8 || (expoHits % 2000) == 0)) {
-                    Log("[GP] expo skip non-AE f150=%.4f (shared cb size %u)\n", before, g_expoSize);
                 }
             }
             if (g_maps[i].size == 224 && n >= 40) {
-                if (g_specScale > 0.0f) {
-                    float d0 = f[16], d1 = f[17], d2 = f[18];
-                    if (d0 >= 0 && d0 < 8 && d1 >= 0 && d1 < 8 && d2 >= 0 && d2 < 8 && (d0 + d1 + d2) > 0.01f
-                        && (f[24] + f[25] + f[26]) <= 0.0001f) {
-                        // Dielectric F0: 4 %, colourless. Metals keep their own
-                        // specular because they never hit the "specular == 0" test.
-                        f[24] = g_specScale; f[25] = g_specScale; f[26] = g_specScale;
-                        f[27] = g_specPower;
-                        if (g_specLogs < 4) {
+                if (g_specMode == 1 && g_specBoost > 0.0f) {
+                    float s0 = f[24], s1 = f[25], s2 = f[26];
+                    float sum = s0 + s1 + s2;
+                    // Only boost materials that already have specular (skip grass/clouds).
+                    if (sum > 0.0005f && sum < 8.0f) {
+                        float m = 1.0f + g_specBoost;
+                        f[24] = s0 * m; f[25] = s1 * m; f[26] = s2 * m;
+                        if (g_specPower > 0.0f) f[27] = g_specPower;
+                        if (g_specLogs < 6) {
                             g_specLogs++;
-                            Log("[GP] spec F0 %.3f power %.1f on diffuse (%.2f %.2f %.2f)\n",
-                                g_specScale, g_specPower, d0, d1, d2);
+                            Log("[GP] spec boost x%.3f on (%.3f %.3f %.3f) -> (%.3f %.3f %.3f)\n",
+                                m, s0, s1, s2, f[24], f[25], f[26]);
                         }
                     }
                 }
@@ -433,17 +639,303 @@ static void SetCand(DepthCand& c, ID3D11Texture2D* tex, const D3D11_TEXTURE2D_DE
     }
 }
 
+// ---- MRT / depth-timeline probe (GP_probe_mrt.txt) ----
+struct MrtSeenKey {
+    int fmt = 0, w = 0, h = 0, samples = 0, bind = 0;
+    char kind = 'r';
+    bool dumped = false;
+    int hits = 0;
+};
+static MrtSeenKey g_mrtSeen[96];
+static int g_mrtSeenN = 0;
+static int g_mrtDumps = 0;
+static const int kMrtMaxDumps = 12;
+
+struct DepthTlSlot {
+    ID3D11Texture2D* tex = nullptr;
+    int samples = 0;
+    int lastPresent = -1;
+    float bestCloud = 2.0f;
+};
+static DepthTlSlot g_depthTl[16];
+static int g_depthTlN = 0;
+static float g_cleanBestCloud = 2.0f;
+static bool g_cleanDumped = false;
+static ID3D11Texture2D* g_mrtStageColor = nullptr;
+static DXGI_FORMAT g_mrtStageColorFmt = DXGI_FORMAT_UNKNOWN;
+static UINT g_mrtStageColorW = 0, g_mrtStageColorH = 0;
+static ID3D11Texture2D* g_mrtStageDepth = nullptr;
+static DXGI_FORMAT g_mrtStageDepthFmt = DXGI_FORMAT_UNKNOWN;
+static UINT g_mrtStageDepthW = 0, g_mrtStageDepthH = 0;
+
+static void RefreshProbeMrtFlag()
+{
+    bool on = GetFileAttributesA((ExeDir() + "\\GP_probe_mrt.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+    if (on != g_probeMrt) {
+        g_probeMrt = on;
+        Log("[GP] probe_mrt %s\n", on ? "ON" : "OFF");
+    }
+    if (g_probeMrt) g_presentMode = 2;
+}
+
+static int FindOrAddMrtKey(char kind, const D3D11_TEXTURE2D_DESC& dd)
+{
+    for (int i = 0; i < g_mrtSeenN; i++) {
+        if (g_mrtSeen[i].kind == kind && g_mrtSeen[i].fmt == (int)dd.Format
+            && g_mrtSeen[i].w == (int)dd.Width && g_mrtSeen[i].h == (int)dd.Height
+            && g_mrtSeen[i].samples == (int)dd.SampleDesc.Count
+            && g_mrtSeen[i].bind == (int)dd.BindFlags) {
+            g_mrtSeen[i].hits++;
+            return i;
+        }
+    }
+    if (g_mrtSeenN >= 96) return -1;
+    MrtSeenKey& k = g_mrtSeen[g_mrtSeenN];
+    k.kind = kind; k.fmt = (int)dd.Format; k.w = (int)dd.Width; k.h = (int)dd.Height;
+    k.samples = (int)dd.SampleDesc.Count; k.bind = (int)dd.BindFlags;
+    k.dumped = false; k.hits = 1;
+    FILE* cf = fopen((ExeDir() + "\\GP_mrt_census.txt").c_str(), "a");
+    if (cf) {
+        fprintf(cf, "%c fmt=%d %dx%d samples=%d bind=%u present=%d\n",
+            kind, k.fmt, k.w, k.h, k.samples, (unsigned)k.bind, g_mrtPresentSeq);
+        fclose(cf);
+    }
+    Log("[GP] mrt census %c fmt=%d %ux%u samples=%u bind=%u\n",
+        kind, (int)dd.Format, dd.Width, dd.Height, dd.SampleDesc.Count, dd.BindFlags);
+    return g_mrtSeenN++;
+}
+
+static bool EnsureMrtStageColor(const D3D11_TEXTURE2D_DESC& src)
+{
+    if (g_mrtStageColor && g_mrtStageColorFmt == src.Format
+        && g_mrtStageColorW == src.Width && g_mrtStageColorH == src.Height)
+        return true;
+    if (g_mrtStageColor) { g_mrtStageColor->Release(); g_mrtStageColor = nullptr; }
+    D3D11_TEXTURE2D_DESC st = src;
+    st.MipLevels = 1; st.ArraySize = 1; st.SampleDesc.Count = 1; st.SampleDesc.Quality = 0;
+    st.Usage = D3D11_USAGE_STAGING; st.BindFlags = 0; st.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    st.MiscFlags = 0;
+    if (FAILED(g_dev->CreateTexture2D(&st, nullptr, &g_mrtStageColor))) return false;
+    g_mrtStageColorFmt = src.Format; g_mrtStageColorW = src.Width; g_mrtStageColorH = src.Height;
+    return true;
+}
+
+static bool EnsureMrtStageDepth(const D3D11_TEXTURE2D_DESC& src)
+{
+    if (g_mrtStageDepth && g_mrtStageDepthFmt == src.Format
+        && g_mrtStageDepthW == src.Width && g_mrtStageDepthH == src.Height)
+        return true;
+    if (g_mrtStageDepth) { g_mrtStageDepth->Release(); g_mrtStageDepth = nullptr; }
+    D3D11_TEXTURE2D_DESC st = src;
+    st.MipLevels = 1; st.ArraySize = 1; st.SampleDesc.Count = 1; st.SampleDesc.Quality = 0;
+    st.Usage = D3D11_USAGE_STAGING; st.BindFlags = 0; st.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    st.MiscFlags = 0;
+    if (FAILED(g_dev->CreateTexture2D(&st, nullptr, &g_mrtStageDepth))) return false;
+    g_mrtStageDepthFmt = src.Format; g_mrtStageDepthW = src.Width; g_mrtStageDepthH = src.Height;
+    return true;
+}
+
+static UINT BytesPerPixelApprox(DXGI_FORMAT f)
+{
+    switch (f) {
+    case DXGI_FORMAT_R8_UNORM: case DXGI_FORMAT_A8_UNORM: case DXGI_FORMAT_R8_TYPELESS: return 1;
+    case DXGI_FORMAT_R8G8_UNORM: case DXGI_FORMAT_R16_FLOAT: case DXGI_FORMAT_R16_UNORM:
+    case DXGI_FORMAT_R16_TYPELESS: return 2;
+    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS: case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+    case DXGI_FORMAT_R10G10B10A2_UNORM: case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+    case DXGI_FORMAT_R11G11B10_FLOAT: case DXGI_FORMAT_R16G16_FLOAT:
+    case DXGI_FORMAT_R32_FLOAT: case DXGI_FORMAT_R32_TYPELESS:
+    case DXGI_FORMAT_R24G8_TYPELESS: case DXGI_FORMAT_D24_UNORM_S8_UINT:
+    case DXGI_FORMAT_R24_UNORM_X8_TYPELESS: return 4;
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: case DXGI_FORMAT_R16G16B16A16_UNORM:
+    case DXGI_FORMAT_R16G16B16A16_TYPELESS: case DXGI_FORMAT_R32G32_FLOAT: return 8;
+    case DXGI_FORMAT_R32G32B32A32_FLOAT: case DXGI_FORMAT_R32G32B32A32_TYPELESS: return 16;
+    default: return 4;
+    }
+}
+
+static void DumpMrtColorOnce(ID3D11Texture2D* tex, const D3D11_TEXTURE2D_DESC& dd, int keyIdx)
+{
+    if (!g_probeMrt || !g_dev || !g_ctx || !tex) return;
+    if (keyIdx < 0 || g_mrtSeen[keyIdx].dumped) return;
+    if (g_mrtDumps >= kMrtMaxDumps) return;
+    if (dd.SampleDesc.Count > 1) return;
+    if (dd.Width != g_bbW || dd.Height != g_bbH || !g_bbW) return;
+    if (g_mrtPresentSeq < 60) return;
+    if (!EnsureMrtStageColor(dd)) return;
+    g_ctx->CopyResource(g_mrtStageColor, tex);
+    D3D11_MAPPED_SUBRESOURCE m{};
+    if (FAILED(g_ctx->Map(g_mrtStageColor, 0, D3D11_MAP_READ, 0, &m))) return;
+    char name[96];
+    snprintf(name, sizeof(name), "\\GP_mrt_%d_%ux%u.raw", (int)dd.Format, dd.Width, dd.Height);
+    FILE* f = fopen((ExeDir() + name).c_str(), "wb");
+    UINT bpp = BytesPerPixelApprox(dd.Format);
+    if (f) {
+        for (UINT y = 0; y < dd.Height; y++)
+            fwrite((const uint8_t*)m.pData + (size_t)y * m.RowPitch, 1, (size_t)dd.Width * bpp, f);
+        fclose(f);
+        g_mrtSeen[keyIdx].dumped = true;
+        g_mrtDumps++;
+        FILE* cf = fopen((ExeDir() + "\\GP_mrt_census.txt").c_str(), "a");
+        if (cf) {
+            fprintf(cf, "dump %s fmt=%d bpp=%u\n", name + 1, (int)dd.Format, bpp);
+            fclose(cf);
+        }
+        Log("[GP] mrt dump %s\n", name + 1);
+    }
+    g_ctx->Unmap(g_mrtStageColor, 0);
+}
+
+static void SampleDepthTimeline(ID3D11Texture2D* tex, const D3D11_TEXTURE2D_DESC& dd)
+{
+    if (!g_probeMrt || !g_dev || !g_ctx || !tex) return;
+    if (!g_bbW || dd.Width != g_bbW || dd.Height != g_bbH) return;
+    if (dd.SampleDesc.Count > 1) return;
+    if (g_mrtPresentSeq < 45) return;
+
+    int slot = -1;
+    for (int i = 0; i < g_depthTlN; i++) if (g_depthTl[i].tex == tex) { slot = i; break; }
+    if (slot < 0) {
+        if (g_depthTlN >= 16) return;
+        slot = g_depthTlN++;
+        g_depthTl[slot].tex = tex;
+        g_depthTl[slot].samples = 0;
+        g_depthTl[slot].lastPresent = -1;
+        g_depthTl[slot].bestCloud = 2.0f;
+    }
+    if (g_depthTl[slot].samples >= 3) return;
+    if (g_depthTl[slot].lastPresent == g_mrtPresentSeq) return;
+    if ((g_mrtPresentSeq % 20) != (slot % 20)) return;
+    g_depthTl[slot].lastPresent = g_mrtPresentSeq;
+
+    if (!EnsureMrtStageDepth(dd)) return;
+    g_ctx->CopyResource(g_mrtStageDepth, tex);
+    D3D11_MAPPED_SUBRESOURCE m{};
+    if (FAILED(g_ctx->Map(g_mrtStageDepth, 0, D3D11_MAP_READ, 0, &m))) return;
+
+    float mn = 1e9f, mx = -1e9f, sum = 0.0f;
+    int cnt = 0, skyN = 0, cloudN = 0, stN = 0, stNz = 0;
+    bool isR32 = (dd.Format == DXGI_FORMAT_R32_TYPELESS || dd.Format == DXGI_FORMAT_R32_FLOAT
+               || dd.Format == DXGI_FORMAT_D32_FLOAT);
+    for (int gy = 1; gy <= 10; gy++) {
+        for (int gx = 1; gx <= 16; gx++) {
+            UINT px = (UINT)((float)dd.Width * gx / 17.0f);
+            UINT py = (UINT)((float)dd.Height * gy / 11.0f);
+            const uint8_t* row = (const uint8_t*)m.pData + (size_t)py * m.RowPitch;
+            float v = 0.0f;
+            uint8_t st = 0;
+            if (isR32) {
+                uint32_t bits = *(const uint32_t*)(row + (size_t)px * 4);
+                float f; memcpy(&f, &bits, 4); v = f;
+            } else {
+                uint32_t raw = *(const uint32_t*)(row + (size_t)px * 4);
+                v = (float)(raw & 0xFFFFFFu) / 16777216.0f;
+                st = (uint8_t)((raw >> 24) & 0xFFu);
+                stN++;
+                if (st) stNz++;
+            }
+            if (v < mn) mn = v;
+            if (v > mx) mx = v;
+            sum += v; cnt++;
+            if (v >= 0.995f) skyN++;
+            else if (v > 0.94f && v < 0.995f) cloudN++;
+        }
+    }
+    g_ctx->Unmap(g_mrtStageDepth, 0);
+
+    float skyF = cnt ? (float)skyN / (float)cnt : 0.0f;
+    float cloudF = cnt ? (float)cloudN / (float)cnt : 0.0f;
+    float stF = stN ? (float)stNz / (float)stN : -1.0f;
+    g_depthTl[slot].samples++;
+    if (cloudF < g_depthTl[slot].bestCloud) g_depthTl[slot].bestCloud = cloudF;
+
+    FILE* tf = fopen((ExeDir() + "\\GP_depth_timeline.txt").c_str(), "a");
+    if (tf) {
+        fprintf(tf,
+            "present=%d dsv=%p fmt=%d min=%.4f max=%.4f avg=%.4f sky%%=%.1f cloud%%=%.1f stencil_nz%%=%.1f sample=%d\n",
+            g_mrtPresentSeq, (void*)tex, (int)dd.Format, mn, mx, cnt ? sum / cnt : -1.0f,
+            100.0f * skyF, 100.0f * cloudF, stF < 0 ? -1.0f : 100.0f * stF, g_depthTl[slot].samples);
+        fclose(tf);
+    }
+    Log("[GP] depth timeline fmt=%d sky=%.1f%% cloud=%.1f%% st=%.1f%%\n",
+        (int)dd.Format, 100.0f * skyF, 100.0f * cloudF, stF < 0 ? -1.0f : 100.0f * stF);
+
+    if (cloudF + 0.01f < g_cleanBestCloud || (!g_cleanDumped && cloudF < 0.08f)) {
+        g_cleanBestCloud = cloudF;
+        if (SUCCEEDED(g_ctx->Map(g_mrtStageDepth, 0, D3D11_MAP_READ, 0, &m))) {
+            FILE* df = fopen((ExeDir() + "\\GP_depth_clean_candidate.raw").c_str(), "wb");
+            if (df) {
+                for (UINT y = 0; y < dd.Height; y++)
+                    fwrite((const uint8_t*)m.pData + (size_t)y * m.RowPitch, 1, (size_t)dd.Width * 4, df);
+                fclose(df);
+                g_cleanDumped = true;
+                FILE* mf = fopen((ExeDir() + "\\GP_depth_timeline.txt").c_str(), "a");
+                if (mf) {
+                    fprintf(mf, "clean_dump present=%d cloud%%=%.1f sky%%=%.1f fmt=%d\n",
+                        g_mrtPresentSeq, 100.0f * cloudF, 100.0f * skyF, (int)dd.Format);
+                    fclose(mf);
+                }
+                Log("[GP] depth clean candidate dump cloud=%.1f%%\n", 100.0f * cloudF);
+            }
+            g_ctx->Unmap(g_mrtStageDepth, 0);
+        }
+    }
+}
+
+static void NoteMrtTex(char kind, ID3D11Texture2D* tex, bool wantDump)
+{
+    if (!tex || !g_bbW) return;
+    D3D11_TEXTURE2D_DESC dd{}; tex->GetDesc(&dd);
+    if (dd.Width != g_bbW || dd.Height != g_bbH) return;
+    int idx = FindOrAddMrtKey(kind, dd);
+    if (wantDump && kind == 'r' && idx >= 0) DumpMrtColorOnce(tex, dd, idx);
+}
+
 static void STDMETHODCALLTYPE Hook_OMSetRT(ID3D11DeviceContext* ctx, UINT n, ID3D11RenderTargetView* const* rtvs, ID3D11DepthStencilView* dsv)
 {
-    if (dsv && dsv != g_lastDSV && g_bbW && g_bbH) {
-        g_lastDSV = dsv;
+    if (g_probeMrt && g_bbW && g_bbH && rtvs) {
+        for (UINT i = 0; i < n && i < 8; i++) {
+            if (!rtvs[i]) continue;
+            ID3D11Resource* res = nullptr;
+            rtvs[i]->GetResource(&res);
+            if (!res) continue;
+            ID3D11Texture2D* tex = nullptr;
+            if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
+                NoteMrtTex('r', tex, true);
+                tex->Release();
+            }
+            res->Release();
+        }
+        ID3D11ShaderResourceView* srvs[8] = {};
+        ctx->PSGetShaderResources(0, 8, srvs);
+        for (int i = 0; i < 8; i++) {
+            if (!srvs[i]) continue;
+            ID3D11Resource* res = nullptr;
+            srvs[i]->GetResource(&res);
+            if (res) {
+                ID3D11Texture2D* tex = nullptr;
+                if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
+                    NoteMrtTex('s', tex, false);
+                    tex->Release();
+                }
+                res->Release();
+            }
+            srvs[i]->Release();
+        }
+    }
+
+    if (dsv && g_bbW && g_bbH) {
+        const bool dsvChanged = (dsv != g_lastDSV);
+        if (dsvChanged) g_lastDSV = dsv;
         ID3D11Resource* res = nullptr;
         dsv->GetResource(&res);
         if (res) {
             ID3D11Texture2D* tex = nullptr;
             if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
                 D3D11_TEXTURE2D_DESC dd{}; tex->GetDesc(&dd);
-                {
+                if (dsvChanged) {
                     static int seen[64][4]{}; static int nseen = 0;
                     bool dup = false;
                     for (int k = 0; k < nseen; k++)
@@ -454,9 +946,13 @@ static void STDMETHODCALLTYPE Hook_OMSetRT(ID3D11DeviceContext* ctx, UINT n, ID3
                     }
                 }
                 if (dd.Width == g_bbW && dd.Height == g_bbH) {
-                    bool srvOk = (dd.BindFlags & D3D11_BIND_SHADER_RESOURCE) != 0;
-                    if (dd.SampleDesc.Count == 1) SetCand(srvOk ? g_candA : g_candB, tex, dd, srvOk ? 0 : 1);
-                    else SetCand(g_candMS, tex, dd, 2);
+                    if (dsvChanged) {
+                        bool srvOk = (dd.BindFlags & D3D11_BIND_SHADER_RESOURCE) != 0;
+                        if (dd.SampleDesc.Count == 1) SetCand(srvOk ? g_candA : g_candB, tex, dd, srvOk ? 0 : 1);
+                        else SetCand(g_candMS, tex, dd, 2);
+                        if (g_probeMrt) FindOrAddMrtKey('d', dd);
+                    }
+                    if (g_probeMrt) SampleDepthTimeline(tex, dd);
                 }
                 tex->Release();
             }
@@ -930,6 +1426,36 @@ static void DepthProbe()
     }
 }
 
+static void ReleaseHistResources()
+{
+    for (int i = 0; i < 2; i++) {
+        if (g_histSRV[i]) { g_histSRV[i]->Release(); g_histSRV[i] = nullptr; }
+        if (g_histRTV[i]) { g_histRTV[i]->Release(); g_histRTV[i] = nullptr; }
+        if (g_histTex[i]) { g_histTex[i]->Release(); g_histTex[i] = nullptr; }
+    }
+    g_histValid = 0;
+    g_histWrite = 0;
+}
+
+static bool CreateHistResources(UINT w, UINT h)
+{
+    ReleaseHistResources();
+    for (int i = 0; i < 2; i++) {
+        D3D11_TEXTURE2D_DESC td{};
+        td.Width = w; td.Height = h; td.MipLevels = 1; td.ArraySize = 1;
+        td.Format = DXGI_FORMAT_R16G16_FLOAT;
+        td.SampleDesc.Count = 1; td.Usage = D3D11_USAGE_DEFAULT;
+        td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        if (FAILED(g_dev->CreateTexture2D(&td, nullptr, &g_histTex[i]))) return false;
+        if (FAILED(g_dev->CreateRenderTargetView(g_histTex[i], nullptr, &g_histRTV[i]))) return false;
+        if (FAILED(g_dev->CreateShaderResourceView(g_histTex[i], nullptr, &g_histSRV[i]))) return false;
+    }
+    g_histValid = 0;
+    g_histWrite = 0;
+    Log("[GP] hist RT %ux%u RG16F ready\n", w, h);
+    return true;
+}
+
 static void EnsurePresentResources(IDXGISwapChain* sc)
 {
     if (g_presentReady || !g_dev || !g_ctx) return;
@@ -955,7 +1481,7 @@ static void EnsurePresentResources(IDXGISwapChain* sc)
     hr = g_dev->CreateShaderResourceView(g_colorTex, nullptr, &g_colorSRV);
     if (FAILED(hr)) { Log("[GP] present colour srv failed hr=%08X\n", (unsigned)hr); bb->Release(); return; }
     D3D11_BUFFER_DESC cbd{};
-    cbd.ByteWidth = 48; cbd.Usage = D3D11_USAGE_DEFAULT; cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    cbd.ByteWidth = 64; cbd.Usage = D3D11_USAGE_DEFAULT; cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     hr = g_dev->CreateBuffer(&cbd, nullptr, &g_cb);
     if (FAILED(hr)) { Log("[GP] present cb failed hr=%08X\n", (unsigned)hr); bb->Release(); return; }
     D3D11_SAMPLER_DESC sd{};
@@ -963,6 +1489,22 @@ static void EnsurePresentResources(IDXGISwapChain* sc)
     sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     sd.MaxLOD = D3D11_FLOAT32_MAX;
     if (FAILED(g_dev->CreateSamplerState(&sd, &g_smp))) { bb->Release(); return; }
+    {
+        D3D11_BLEND_DESC bd{};
+        bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        bd.RenderTarget[1].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        if (FAILED(g_dev->CreateBlendState(&bd, &g_blendOpaque)))
+            Log("[GP] present blend state failed\n");
+        D3D11_DEPTH_STENCIL_DESC dd{};
+        dd.DepthEnable = FALSE;
+        dd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+        dd.StencilEnable = FALSE;
+        if (FAILED(g_dev->CreateDepthStencilState(&dd, &g_dssNoDepth)))
+            Log("[GP] present dss failed\n");
+    }
+    if (!CreateHistResources(d.Width, d.Height)) {
+        Log("[GP] hist RT create failed — temporal disabled\n");
+    }
     g_bbTex = bb; g_bbW = d.Width; g_bbH = d.Height; g_presentReady = true;
     Log("[GP] present ready %ux%u fmt %d samples %u\n", d.Width, d.Height, (int)d.Format, d.SampleDesc.Count);
 }
@@ -975,11 +1517,16 @@ static PFN_Present g_origPresent = nullptr;
 static void ReloadExpoCfg()
 {
     FILE* ef = fopen((ExeDir() + "\\GP_expo.txt").c_str(), "r");
-    if (!ef) return;
-    unsigned s = 0; float lo = 0.0f, hi = 0.0f;
-    int got = fscanf(ef, "%u %f %f", &s, &lo, &hi);
+    if (!ef) {
+        // Missing file must disable — otherwise a rename while running leaves
+        // the last clamp active until restart.
+        if (g_expoSize) Log("[GP] expo cfg: removed -> disabled\n");
+        g_expoSize = 0;
+        g_expoAdapt = 0;
+        return;
+    }
+    ParseExpoFile(ef);
     fclose(ef);
-    if (got >= 3) { g_expoSize = s; g_expoLo = lo; g_expoHi = hi; }
 }
 
 static void ReloadPresentCfg()
@@ -987,31 +1534,62 @@ static void ReloadPresentCfg()
     ReloadExpoCfg();
     {
         FILE* sf = fopen((ExeDir() + "\\GP_spec.txt").c_str(), "r");
-        if (sf) { float s = 0, pw = 24; int got = fscanf(sf, "%f %f", &s, &pw); fclose(sf);
-                  if (got >= 1) g_specScale = s; if (got >= 2) g_specPower = pw; }
+        if (sf) { ParseSpecFile(sf); fclose(sf); }
         FILE* af = fopen((ExeDir() + "\\GP_amb.txt").c_str(), "r");
         if (af) { float a = 0, b = 0, tr = 0.95f, tb = 1.06f; int got = fscanf(af, "%f %f %f %f", &a, &b, &tr, &tb); fclose(af);
                   if (got >= 2) { g_ambScale = a; g_aeScale = b; } if (got >= 4) { g_tintR = tr; g_tintB = tb; } }
     }
     FILE* pf = fopen((ExeDir() + "\\GP_present.txt").c_str(), "r");
-    if (!pf) return;
-    int m = g_presentMode;
-    float st = g_aoStrength, rad = g_aoRadius, th = g_aoProjK, fr = g_presentFrac;
-    fscanf(pf, "%d %f %f %f %f", &m, &st, &rad, &th, &fr);
-    fclose(pf);
-    g_presentMode = m; g_aoStrength = st; g_aoRadius = rad; g_aoProjK = th; g_presentFrac = fr;
+    if (pf) { ParsePresentLine(pf); fclose(pf); }
+    {
+        FILE* bf = fopen((ExeDir() + "\\GP_light_bind.txt").c_str(), "r");
+        if (bf) { ParseLightBindFile(bf); fclose(bf); }
+    }
     {
         FILE* lf = fopen((ExeDir() + "\\GP_light.txt").c_str(), "r");
-        if (lf) {
-            float lx = g_lightX, ly = g_lightY, lz = g_lightZ, stp = g_contactSteps;
-            int got = fscanf(lf, "%f %f %f %f", &lx, &ly, &lz, &stp);
-            fclose(lf);
-            if (got >= 2) { g_lightX = lx; g_lightY = ly; }
-            if (got >= 3) g_lightZ = lz;
-            if (got >= 4) g_contactSteps = stp;
-        }
+        if (lf) { ParseLightFile(lf); fclose(lf); }
+    }
+    {
+        FILE* df = fopen((ExeDir() + "\\GP_cb_dump.txt").c_str(), "r");
+        if (df) { ParseCbDumpFile(df); fclose(df); }
+        else g_cbDumpOn = 0;
     }
     g_probeOn = GetFileAttributesA((ExeDir() + "\\GP_probe.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+    RefreshProbeMrtFlag();
+}
+
+static void SampleFrameLuma()
+{
+    if (!g_expoAdapt || !g_dev || !g_ctx || !g_colorTex || !g_bbW || !g_bbH) return;
+    if ((g_presentCount % 30) != 0) return;
+    D3D11_TEXTURE2D_DESC cd{}; g_colorTex->GetDesc(&cd);
+    if (!g_lumaStaging) {
+        D3D11_TEXTURE2D_DESC st = cd;
+        st.Usage = D3D11_USAGE_STAGING; st.BindFlags = 0;
+        st.CPUAccessFlags = D3D11_CPU_ACCESS_READ; st.MiscFlags = 0;
+        if (FAILED(g_dev->CreateTexture2D(&st, nullptr, &g_lumaStaging))) return;
+    }
+    g_ctx->CopyResource(g_lumaStaging, g_colorTex);
+    D3D11_MAPPED_SUBRESOURCE m{};
+    if (FAILED(g_ctx->Map(g_lumaStaging, 0, D3D11_MAP_READ, 0, &m))) return;
+    double sum = 0.0; int cnt = 0;
+    for (int gy = 1; gy <= 6; gy++) {
+        for (int gx = 1; gx <= 8; gx++) {
+            UINT px = (UINT)((float)cd.Width * gx / 9.0f);
+            UINT py = (UINT)((float)cd.Height * gy / 7.0f);
+            const uint8_t* p = (const uint8_t*)m.pData + (size_t)py * m.RowPitch + (size_t)px * 4;
+            // Backbuffer is typically B8G8R8A8.
+            float b = p[0] / 255.0f, g = p[1] / 255.0f, r = p[2] / 255.0f;
+            sum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            cnt++;
+        }
+    }
+    g_ctx->Unmap(g_lumaStaging, 0);
+    if (!cnt) return;
+    g_frameLuma = (float)(sum / cnt);
+    float t = (g_expoTarget - g_frameLuma) / 0.35f;
+    if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+    g_expoHiEff = g_expoHiLo + (g_expoHiHi - g_expoHiLo) * t;
 }
 
 // Touch GP_dump.txt and the next presented frame is written out as
@@ -1056,6 +1634,8 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
 {
     static int tick = 0;
     if ((++tick % 60) == 0) ReloadPresentCfg();
+    g_mrtPresentSeq++;
+    if (g_probeMrt) g_presentMode = 2;
     {
         static int rp = 0;
         int fixed = ReassertPatches();
@@ -1140,16 +1720,26 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
             bb->Release();
         }
 
-        // Always composite when depth is ready. Sky is protected in-shader via
-        // g_skyThr (derived from probe max) — do not hard-disable the whole pass.
-        if (g_depthReady && g_depthSRV && g_vs && g_psAO && g_cb && g_colorSRV && g_bbW && g_bbH) {
+        // Composite only with sane scene depth (near-1 sky marker). Insane buffers
+        // pack sky below GROUND_D_MAX and paint the whole frame as "contact".
+        // Also force opaque blend — leftover game blend states black out the sky.
+        if (g_depthReady && g_depthSane && g_depthSRV && g_vs && g_psAO && g_cb && g_colorSRV && g_bbW && g_bbH) {
             g_probeInsertOk++;
-            float prm[12];
+            SampleFrameLuma();
+
+            float lx = g_lightX, ly = g_lightY, lz = g_lightZ;
+            if (g_lightAuto && g_lightAutoValid) {
+                lx = g_lightAutoX; ly = g_lightAutoY; lz = g_lightAutoZ;
+            }
+
+            float prm[16];
             prm[0] = g_aoStrength; prm[1] = g_aoRadius; prm[2] = g_aoProjK; prm[3] = (float)g_presentMode;
             prm[4] = 1.0f / (float)g_bbW; prm[5] = 1.0f / (float)g_bbH;
-            prm[6] = (float)(g_presentCount & 7) * 0.5f;
-            prm[7] = g_skyThr;   // g_p1.w — sky/far reject threshold
-            prm[8] = g_lightX; prm[9] = g_lightY; prm[10] = g_lightZ; prm[11] = g_contactSteps;
+            prm[6] = 0.0f;
+            prm[7] = g_skyThr;
+            prm[8] = lx; prm[9] = ly; prm[10] = lz; prm[11] = g_contactSteps;
+            prm[12] = g_lumaProtect0; prm[13] = g_lumaProtect1;
+            prm[14] = g_depthEps; prm[15] = 0.0f;
             g_ctx->UpdateSubresource(g_cb, 0, nullptr, prm, 0, 0);
 
             ID3D11RenderTargetView* oldRTV = nullptr; ID3D11DepthStencilView* oldDSV = nullptr;
@@ -1157,11 +1747,22 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
             UINT nvp = 1; D3D11_VIEWPORT oldVP{}; g_ctx->RSGetViewports(&nvp, &oldVP);
             if (!nvp) { nvp = 1; oldVP.TopLeftX = 0; oldVP.TopLeftY = 0; oldVP.Width = (float)g_bbW; oldVP.Height = (float)g_bbH; oldVP.MinDepth = 0; oldVP.MaxDepth = 1; }
 
+            ID3D11BlendState* oldBlend = nullptr; float oldFactor[4]; UINT oldSample = 0;
+            g_ctx->OMGetBlendState(&oldBlend, oldFactor, &oldSample);
+            ID3D11DepthStencilState* oldDss = nullptr; UINT oldStencil = 0;
+            g_ctx->OMGetDepthStencilState(&oldDss, &oldStencil);
+
             D3D11_VIEWPORT full{};
             full.TopLeftX = 0; full.TopLeftY = 0; full.Width = (float)g_bbW; full.Height = (float)g_bbH;
             full.MinDepth = 0.0f; full.MaxDepth = 1.0f;
 
+            // Single RT only — dual MRT hist previously correlated with black skies.
             g_ctx->OMSetRenderTargets(1, &g_bbRTV, nullptr);
+            if (g_blendOpaque) {
+                float one[4] = { 1, 1, 1, 1 };
+                g_ctx->OMSetBlendState(g_blendOpaque, one, 0xffffffff);
+            }
+            if (g_dssNoDepth) g_ctx->OMSetDepthStencilState(g_dssNoDepth, 0);
             g_ctx->RSSetViewports(1, &full);
             g_ctx->IASetInputLayout(nullptr);
             g_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1188,6 +1789,10 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
             ID3D11Buffer* nullcb = nullptr;
             g_ctx->PSSetConstantBuffers(0, 1, &nullcb);
 
+            g_ctx->OMSetBlendState(oldBlend, oldFactor, oldSample);
+            g_ctx->OMSetDepthStencilState(oldDss, oldStencil);
+            if (oldBlend) oldBlend->Release();
+            if (oldDss) oldDss->Release();
             g_ctx->OMSetRenderTargets(1, &oldRTV, oldDSV);
             g_ctx->RSSetViewports(1, &oldVP);
             if (oldRTV) oldRTV->Release();
@@ -1197,9 +1802,10 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
         }
         g_presentCount++;
         if (g_presentCount < 4 || (g_presentCount % 300) == 0)
-            Log("[GP] present %d depth=%d mode=%d ms=%d builds=%d skyThr=%.4f\n",
-                g_presentCount, (int)(g_depthReady ? 1 : 0), g_presentMode, (int)g_depthIsMS, g_depthBuilds, g_skyThr);
-        // Probe often enough that skyThr tracks view changes (Eden ocean <-> land).
+            Log("[GP] present %d depth=%d sane=%d mode=%d builds=%d skyThr=%.4f light=%.2f,%.2f\n",
+                g_presentCount, (int)(g_depthReady ? 1 : 0), (int)g_depthSane, g_presentMode, g_depthBuilds, g_skyThr,
+                g_lightAuto && g_lightAutoValid ? g_lightAutoX : g_lightX,
+                g_lightAuto && g_lightAutoValid ? g_lightAutoY : g_lightY);
         if (g_presentCount <= 3 || (g_presentCount % 30) == 0) DepthProbe();
     } else if (g_presentReady && g_presentMode != 2) {
         g_probeInsertFail++;

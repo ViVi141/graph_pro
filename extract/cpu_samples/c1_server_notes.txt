@@ -1,0 +1,47 @@
+# C1 headless DS — GP_ServerTest.Altis + gpsample on arma3server_x64
+# Date: 2026-10-24 02:28–02:31
+# Launch: server\run-cpu-sample.ps1 (or manual attach). No d3d11 proxy.
+# Load: initServer spawns 48 groups x 4 AI (~120–189 units), west vs east.
+
+## Modules (raw)
+
+| module | pct |
+|---|---|
+| ntdll.dll | 96.1 |
+| arma3server_x64.exe | 3.72 |
+| KERNELBASE | 0.07 |
+| tbb4malloc_bi_x64 | 0.04 |
+| PhysX* | ~0.02 |
+
+Renorm without ntdll (wait/suspend bias from sampling):
+  arma3server_x64 ≈ 96% of non-wait; allocator+PhysX tiny.
+
+## Sample budget
+
+- interval 50 ms, ~3 min
+- total hits 42614; exe_fn 1433 (~3.4%); flat top (Top1 = 15.5% of exe hits)
+
+## Top exe (pct_exe)
+
+| rva | pct_exe | size | note |
+|---|---|---|---|
+| 0x0140D288 | 15.5 | 785 | mid_fn — server image; NOT client World::Simulate RVA |
+| 0x011DCE70 | 11.4 | 1698 | mid_fn |
+| 0x01088D30 | 5.2 | 690 | mid_fn |
+| rest | <3.5 each | — | flat; no single leaf dominates |
+
+Client known_rva.txt does not apply 1:1 to arma3server_x64 (different .pdata).
+
+## Verdict
+
+- Headless DS path WORKS for CPU sampling (no UI).
+- Same structural conclusion as client YAAB C1: **flat profile → single-leaf SIMD NO-GO**.
+- Next levers on server: reduce AI count / skill / waypoints (soft), or C2 count hooks on server Top RVAs after naming via server RE.
+- One-shot: `powershell -NoProfile -ExecutionPolicy Bypass -File server\run-cpu-sample.ps1 -SampleMinutes 3`
+
+## Pitfalls fixed this session
+
+1. `-mission=` does not auto-play SP; graphics path was wrong tool for this ask.
+2. `-profiles=...\Arma 3` must be one argv; space-safe path = `<game>\GP_server_profile`.
+3. Mission template must live in `<game>\MPMissions\`; empty `addons[]` still warns once then loads.
+4. Do not deploy d3d11.dll alongside gpsample.

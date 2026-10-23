@@ -49,16 +49,17 @@ def parse_top(path: str) -> list[tuple[int, float, int, int]]:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            # hits pct rva size
+            # hits pct_total [pct_exe] rva size  (pct_exe optional, C1b+)
             m = re.match(
-                r"(\d+)\s+([\d.]+)\s+0x([0-9A-Fa-f]+)\s+(\d+)", line
+                r"(\d+)\s+([\d.]+)(?:\s+([\d.]+))?\s+0x([0-9A-Fa-f]+)\s+(\d+)",
+                line,
             )
             if not m:
                 continue
             hits = int(m.group(1))
             pct = float(m.group(2))
-            rva = int(m.group(3), 16)
-            size = int(m.group(4))
+            rva = int(m.group(4), 16)
+            size = int(m.group(5))
             rows.append((hits, pct, rva, size))
     return rows
 

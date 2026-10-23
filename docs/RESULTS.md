@@ -229,3 +229,115 @@
 - `inject/deploy.ps1` 部署 v1 默认集；跳过 debug/tight/example，避免盖掉 mode0。
 - README / `inject/README.md` 已同步；`demo/ab-side-by-side.png` 已重生（vanilla vs 当前注入成像）。
 - 引擎内总览：部署后跑 GP Shot，确认 `GP_shader.log` 含 `expo hit` 与 `present mode 0`。
+
+---
+
+## 2026-10-23 法线 + 干净深度双门禁（N1 / N2）
+
+探针：`GP_probe_mrt.txt` → `GP_mrt_census.txt` / `GP_mrt_*.raw` / `GP_depth_timeline.txt`；分析：`tools/analyze_mrt_depth.py`。  
+样本：`demo/_live/mrt-probe-20261023-231631/`；图：`demo/mrt-candidates.png`、`demo/depth-timeline.png`。
+
+### N1 · 全屏 RT 普查（法线？）
+
+| 观测 | 结论 |
+|---|---|
+| 全屏 RT/SRV | `R16G16B16A16_FLOAT`、`R8G8B8A8`、`R32_FLOAT`、`R16G16_FLOAT`、`R8` 等 |
+| 法线启发式 `n=rgb*2-1` | 最佳 dump 仍 `unit%≲20`，`mean\|n\|` 偏离 1.0（色/HDR/标量缓冲） |
+| G-buffer 法线 | **NO-GO**（与 docs/10 / Gate0「无法线 MRT」一致，现为全帧普查实锤） |
+
+### N2 · 深度时间线（云前干净深度？）
+
+| 观测 | 结论 |
+|---|---|
+| 全屏 DSV | 仅 `R24G8_TYPELESS` / `D24_UNORM_S8_UINT` 一族（MSAA 与 resolve） |
+| 时间线 | 各采样点 `sky%≈70`、`cloud-band(0.94–0.995)%≈30`、`stencil_nz%=0`，无更干净旁路 |
+| 干净深度 / stencil 掩码 | **NO-GO** |
+
+### N3 · 接线裁决
+
+**双 NO-GO** → 不接线法线、不换深度源；Present 接触阴影保持 **默认 mode 2 关闭**。二次 AO 仍待法线（已证无）。
+
+---
+
+## 2026-10-24 接触阴影产品化 + CB 旋钮
+
+### Present 打磨（代码已合入）
+
+| 项 | 实现 | 状态 |
+|---|---|---|
+| 软笔触 | 双半径（0.4× / 1.0×）加权累加，steps 默认 10 | ✅ HLSL + 离线 smoke |
+| SSAO 明度保护 | `protect=(luma-luma0)/(luma1-luma0)`，暗像素少叠暗 | ✅ 默认 0.05 / 0.18 |
+| 时域滤波 | RG16F ping-pong（occ, depth）；`|Δd|>eps` 则不用历史 | ✅ 代理 MRT |
+| 默认 mode | 仍 **2**；试验复制 `GP_present_on.txt` | 待引擎 A/B 后改 mode 0 |
+
+离线：`python tools/contact_shadow_smoke.py` → `demo/contact-shadow-smoke.png`（五联：原色 / 遮挡 / 红 / 有保护 / 无保护）。
+
+`GP_present.txt`：`mode strength radius_m projK frac [alpha] [luma0] [luma1]`
+
+### 自动光向 + CB 普查
+
+| 项 | 做法 |
+|---|---|
+| Dump | `GP_cb_dump.txt` = `enable min max everyN maxFiles` → `GP_cb_<size>_<n>.f32` + `GP_cb_index.txt` |
+| Hunt | `python tools/cb_sun_hunt.py day dusk indoor --out inject/presets/GP_light_bind.txt` |
+| 运行时 | `GP_light.txt` = `auto` + `GP_light_bind.txt`（`size idx`）；日志 `light auto (...)` |
+
+### Phase 2（可选预设，默认关）
+
+| 项 | 预设 | 行为 |
+|---|---|---|
+| 选择性镜面 | `GP_spec_boost.txt` → `1 0.15 0` | 仅 `specSum>ε` 时 ×(1+boost) |
+| 自适应曝光 | `GP_expo_adapt.txt` | 帧亮度采样 → 调制 `hi_eff` |
+
+引擎内验收清单（通过后把 `GP_present.txt` 改为 mode 0）：接触结构残差可见、天空/云 Δ≈0、植被不双压黑、静止噪点可接受、光向与引擎阴影一致。
+
+---
+
+## 2026-10-24 曝光钳制误伤与指纹加严
+
+### 现象
+Eden 中仅转镜头即光照剧变；严重时天空全黑 + 蓝条、地面爆白。关 present 无效；热改名 `GP_expo.txt` 也无效（旧逻辑文件缺失不清 `g_expoSize`）；**重启且 expo 关闭后恢复正常**。
+
+### 根因
+- size=1696 被多个 CB 共用；仅靠 `f150∈[0.02,8]` 会把非 AE 值（日志见 `CLAMPED 5.0→1.1`）当成曝光改掉，糟蹋大气。
+- 真·`PSCB_PostProcess` 邻槽稳定：`c37=(1.0, 0.3, AE, 1.0)`，`c1.w≈0.4545`，`c0≈0`。
+
+### 修复
+- 热重读：`GP_expo.txt` 缺失 → `g_expoSize=0`（立即禁用）。
+- Unmap：必须通过邻槽指纹才钳制；`f150` 收紧到 `[0.05, 4.0]`；拒绝指纹记 `expo skip fingerprint`。
+- 验收：恢复 `GP_expo.txt` 后日志应有 `fp=1` / `CLAMPED ... fp-ok`，不应再出现对 `5.0` 的钳制；转镜头天空不再花掉。
+- 2026-10-24 续：当前会话主导为 `c37=(1, 0.09, AE, 0.75)`（仍 `c1.w≈0.4545`），旧指纹全 `fp=0` 导致钳制停摆；已兼收 layout A `(1,0.30,*,1)` 与 B `(1,0.09,*,0.75)`。
+
+### 接触阴影开 → 全场景黑天（2026-10-24）
+
+与 expo 无关（指纹版 expo 已稳）。日志在 mode0 下频繁 `depth sane 1→0`（max 深度只有 0.70–0.86，无近-1 天空标记），此时整屏 `d<0.88` 被当成近地接触；且 Present 未重置 **BlendState**，游戏残留混合会把全屏乘黑。
+
+修复：
+1. `!g_depthSane` 时跳过合成并清空 hist  
+2. Present 强制不透明 Blend + 关 Depth，画完恢复  
+3. HLSL 重新使用 `skyThr`（`g_p1.w`）拒绝天空/远景  
+
+出货仍默认 mode 2；修好后用 `GP_present_on.txt` 再验。
+
+### 搁置裁决（2026-10-24 01:57）
+
+Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天。  
+**接触阴影产品化搁置**：`kContactShelved = true`，运行时强制 `present mode 2`；保留 HLSL/代理代码待日后有干净深度或新插入点再开。  
+当前出货能力：**ACES + amb + 指纹版 expo**。
+
+---
+
+## 2026-10-24 无头 DS · CPU 软杠杆
+
+场景：`MPMissions\GP_ServerTest.Altis` + `gpsample`（指标用 **exe_fn**，不用 `diag_fps`≈28 常数）。
+
+| 杠杆 | 对比 | 裁决 |
+|---|---|---|
+| AI 数量 | 0/16/48 组 → exe_fn 17/196/570 | **GO** |
+| Waypoint/移动 | 禁 PATH vs CYCLE → 152 vs 557 | **GO（最强）** |
+| setSkill | 0.1 vs 1.0 → 548≈536 | **NO-GO** |
+| 24 轻载具 PhysX | exe +13%，PhysX 模块 &lt;0.02% | **弱** |
+| 单叶子替换 | Top 平坦；距离叶 ~6% exe | **NO-GO** |
+
+全文：[16-cpu-server-soft-levers.md](16-cpu-server-soft-levers.md) · 数据：`extract/cpu_samples/ab_soft_levers_summary.json`  
+脚本：`server/run-cpu-sample.ps1` · `server/ab-soft-levers.ps1`

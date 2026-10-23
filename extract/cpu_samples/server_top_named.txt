@@ -1,0 +1,33 @@
+# named from C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\cpu_samples\top_ai48_20261024_025042.txt
+# exe=arma3server_x64.exe imagebase=0x140000000
+# hits pct_exe rva size owner tag strings
+   60  10.526%  0x0140D288    785  owner=0x0140D288..0140D599  unlabeled  :: -
+   57  10.000%  0x011DCE70   1698  owner=0x011DCE70..011DD512  unlabeled  :: -
+   35   6.140%  0x01088D30    690  owner=0x01088D30..01088FE2  unlabeled  :: -
+   29   5.088%  0x00E32A82    300  owner=0x00E32A82..00E32BAE  unlabeled  :: -
+   21   3.684%  0x00646FC0    608  owner=0x00646FC0..00647220  unlabeled  :: -
+   15   2.632%  0x00EC7274    143  owner=0x00EC7274..00EC7303  unlabeled  :: -
+   14   2.456%  0x01409B30    297  owner=0x01409B30..01409C59  unlabeled  :: -
+   14   2.456%  0x00E26960    870  owner=0x00E26960..00E26CC6  unlabeled  :: -
+   13   2.281%  0x01072032   1598  owner=0x01072032..01072670  unlabeled  :: -
+   11   1.930%  0x01071489    438  owner=0x01071489..0107163F  unlabeled  :: -
+   11   1.930%  0x011D9890    117  owner=0x011D9890..011D9905  unlabeled  :: -
+   10   1.754%  0x011C8D00   6197  owner=0x011C8D00..011CA535  unlabeled  :: Unexpected field type | Unexpected field type | Unused
+    9   1.579%  0x01400FEB   1386  owner=0x01400FEB..01401555  unlabeled  :: -
+    8   1.403%  0x0166F9B4   1008  owner=0x0166F9B4..0166FDA4  unlabeled  :: -
+    7   1.228%  0x011C8620   1751  owner=0x011C8620..011C8CF7  unlabeled  :: Unexpected field type | Unexpected iterator state | Unexpected field type | Unexpected field type | Unexpected field type | Unexpected field type
+    7   1.228%  0x011CA540    361  owner=0x011CA540..011CA6A9  unlabeled  :: -
+    7   1.228%  0x00550ECB    187  owner=0x00550ECB..00550F86  unlabeled  :: -
+    7   1.228%  0x010ABC85    325  owner=0x010ABC85..010ABDCA  unlabeled  :: -
+    7   1.228%  0x011E8990    187  owner=0x011E8990..011E8A4B  unlabeled  :: -
+    6   1.053%  0x010747E0    395  owner=0x010747E0..0107496B  unlabeled  :: -
+    6   1.053%  0x0107F6B0    480  owner=0x0107F6B0..0107F890  unlabeled  :: -
+    5   0.877%  0x011D8A20    152  owner=0x011D8A20..011D8AB8  unlabeled  :: -
+    5   0.877%  0x00FDC89C    615  owner=0x00FDC89C..00FDCB03  unlabeled  :: -
+    5   0.877%  0x0140A1A0    133  owner=0x0140A1A0..0140A225  unlabeled  :: -
+    4   0.702%  0x0054CA83    263  owner=0x0054CA83..0054CB8A  unlabeled  :: -
+
+# fingerprint string -> owner function RVAs
+#   ParallelFor_sync: 0x1130C0, 0x5CC320, 0x6F7D90, 0x6FCE10, 0xA11750, 0xF84570, 0x11C4890
+#   mtVehS: 0xFD78A0
+#   simstep_guard: 0xF92900, 0xFA26F1, 0xFA2DA5, 0xFABA21, 0xFD78A0

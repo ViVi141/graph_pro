@@ -150,6 +150,14 @@ powershell -File inject\counter\remove_sample.ps1
 
 ---
 
+## 无头 DS 续作（2026-10-24）
+
+客户端 YAAB 的 C1/C1b 之后，在 **arma3server_x64** 上用同一套 `gpsample` 量化了 AI 数量 / skill / waypoint / PhysX 软杠杆。  
+**结论摘要**：减单位与禁 PATH/移动为 GO；`setSkill` 与轻载具 PhysX 近 NO-GO；叶子替换仍 NO-GO。  
+详见 [16-cpu-server-soft-levers.md](16-cpu-server-soft-levers.md)。
+
+---
+
 ## C2–C4（后续，未实现）
 
 - **C2**：对 C1 标为叶子的 RVA 生成 `cand_hooks`，用 `gpcount` 记调用次数。  
