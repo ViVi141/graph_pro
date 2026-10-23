@@ -60,6 +60,10 @@ inject/counter/funcs.bin
 inject/counter/funcs_client.bin
 inject/counter/funcs_server.bin
 
+# --- Local scratch (extracted rvmats, test shots) ---
+_tmp_*/
+tmp/
+
 # --- Extract: large / regenerable / timestamped ---
 extract/**/*.shdc
 extract/**/*.png

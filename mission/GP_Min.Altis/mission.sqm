@@ -1,0 +1,165 @@
+version=54;
+class EditorData
+{
+	moveGridStep=1;
+	angleGridStep=0.2617994;
+	scaleGridStep=1;
+	autoGroupingDist=10;
+	toggles=513;
+	class ItemIDProvider
+	{
+		nextID=3;
+	};
+	class MarkerIDProvider
+	{
+		nextID=1;
+	};
+	class Camera
+	{
+		pos[]={14480.101,30.002426,17696.494};
+		dir[]={-0.66850221,-0.6018458,0.43692946};
+		up[]={-0.50379103,0.79860544,0.32927644};
+		aside[]={0.54710793,-1.0777148e-07,0.83707231};
+	};
+};
+binarizationWanted=0;
+sourceName="GP_Min";
+addons[]=
+{
+	"A3_Characters_F"
+};
+class AddonsMetaData
+{
+	class List
+	{
+		items=1;
+		class Item0
+		{
+			className="A3_Characters_F";
+			name="Arma 3 Alpha - Characters and Clothing";
+			author="Bohemia Interactive";
+			url="https://www.arma3.com";
+		};
+	};
+};
+randomSeed=271828;
+class ScenarioData
+{
+	author="GraphPro";
+	overviewText="Fixed-vantage material survey rig.";
+};
+class Intro
+{
+	class Intel
+	{
+		startWeather=0.25;
+		startWind=0.1;
+		startWaves=0.1;
+		forecastWeather=0.25;
+		forecastWind=0.1;
+		forecastWaves=0.1;
+		year=2035;
+		month=7;
+		day=12;
+		hour=12;
+		minute=0;
+		startFogDecay=0.014;
+		forecastFogDecay=0.014;
+	};
+};
+class Mission
+{
+	class Intel
+	{
+		briefingName="GP Min";
+		overviewText="Fixed-vantage material survey rig.";
+		resistanceWest=0;
+		startWeather=0.25;
+		startWind=0.1;
+		startWaves=0.1;
+		forecastWeather=0.25;
+		forecastWind=0.1;
+		forecastWaves=0.1;
+		year=2035;
+		month=7;
+		day=12;
+		hour=12;
+		minute=0;
+		startFogDecay=0.014;
+		forecastFogDecay=0.014;
+	};
+	class Entities
+	{
+		items=1;
+		class Item0
+		{
+			dataType="Group";
+			side="West";
+			class Entities
+			{
+				items=1;
+				class Item0
+				{
+					dataType="Object";
+					class PositionInfo
+					{
+						position[]={14473.492,19.409248,17702.438};
+					};
+					side="West";
+					flags=7;
+					class Attributes
+					{
+						description="GP Min";
+						isPlayable=1;
+					};
+					id=1;
+					type="B_Soldier_F";
+					atlOffset=-1.335144e-05;
+				};
+			};
+			class Attributes
+			{
+			};
+			id=0;
+			atlOffset=-1.335144e-05;
+		};
+	};
+};
+class OutroLoose
+{
+	class Intel
+	{
+		startWeather=0.25;
+		startWind=0.1;
+		startWaves=0.1;
+		forecastWeather=0.25;
+		forecastWind=0.1;
+		forecastWaves=0.1;
+		year=2035;
+		month=7;
+		day=12;
+		hour=12;
+		minute=0;
+		startFogDecay=0.014;
+		forecastFogDecay=0.014;
+	};
+};
+class OutroWin
+{
+	class Intel
+	{
+		startWeather=0.25;
+		startWind=0.1;
+		startWaves=0.1;
+		forecastWeather=0.25;
+		forecastWind=0.1;
+		forecastWaves=0.1;
+		year=2035;
+		month=7;
+		day=12;
+		hour=12;
+		minute=0;
+		startFogDecay=0.014;
+		forecastFogDecay=0.014;
+	};
+};
