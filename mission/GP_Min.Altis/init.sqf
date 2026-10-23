@@ -20,7 +20,7 @@ if (isNull player) then {
     diag_log format ["[GP] after selectPlayer isnull=%1", isNull player];
 };
 
-setDate [2035, 7, 12, 18, 10];
+setDate [2035, 7, 12, 12, 0];
 0 setOvercast 0.30;
 0 setFog [0.05, 0.01, 0];
 0 setRain 0;

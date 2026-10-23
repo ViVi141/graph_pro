@@ -76,12 +76,12 @@ class MainMap
 lastSPMission="Yet Another Arma Benchmark";
 headBob=1;
 floatingZoneArea=0;
-sceneComplexity=900000;
+sceneComplexity=1800000;
 shadowZDistance=200;
-viewDistance=2500.0002;
-preferredObjectViewDistance=1510.9891;
-pipViewDistance=1511;
-terrainGrid=6.25;
+viewDistance=3800;
+preferredObjectViewDistance=3000;
+pipViewDistance=2500;
+terrainGrid=3.125;
 volumeCD=0;
 volumeFX=0;
 volumeSpeech=0;

@@ -62,9 +62,9 @@ static bool g_presentReady = false;
 static int g_presentCount = 0;
 static UINT g_bbW = 0;
 static UINT g_bbH = 0;
-static int g_presentMode = 0;      // 0 = contact shadows, 1 = AO debug, 2 = off, 3 = AO + depth corner
-static float g_aoStrength = 0.70f;
-static float g_aoRadius = 0.30f;     // metres
+static int g_presentMode = 0;      // 0 = contact, 1 = gray debug, 2 = off, 3 = +depth thumb, 4 = red debug
+static float g_aoStrength = 0.45f;   // v1 ship default (conservative)
+static float g_aoRadius = 1.20f;     // metres
 static float g_aoProjK = 600.0f;     // pixels per metre at 1 m
 static float g_presentFrac = 0.30f;
 static float g_lightX = 0.35f;       // screen-space light dir (toward light)
@@ -120,9 +120,13 @@ static ID3D11ShaderResourceView* g_depthSRV = nullptr;
 static bool g_depthReady = false;
 static bool g_depthIsMS = false;
 static bool g_depthDirect = false;
+static bool g_depthSane = true;   // diagnostic: probe saw near-1 sky marker
+static float g_depthMax = 1.0f;   // last probe max; used to derive skyThr
+static float g_skyThr = 0.992f;   // pixels with d >= this are treated as sky
 static UINT g_depthW = 0, g_depthH = 0;
 static DXGI_FORMAT g_depthSrcFmt = DXGI_FORMAT_UNKNOWN;
 static int g_depthFailLogs = 0;
+static int g_depthInsaneLogs = 0;
 
 // ---------------------------------------------------------------- helpers
 static uint32_t Crc32(const void* buf, size_t len)
@@ -360,17 +364,29 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                     }
                 }
             }
-            if (g_expoSize && g_maps[i].size == g_expoSize) {
-                static int dbg = 0;
-                if (dbg < 3) { dbg++; Log("[GP] expo buf n=%u f150=%s hi=%.3f\n", n, n > 151 ? "ok" : "short", g_expoHi); }
-            }
-            if (g_expoSize && g_maps[i].size == g_expoSize && n > 151 && g_expoHi > g_expoLo) {
+            if (g_expoSize && g_maps[i].size == g_expoSize && n > 151) {
+                static int expoHits = 0;
+                expoHits++;
                 float before = f[150];
-                float after = before < g_expoLo ? g_expoLo : (before > g_expoHi ? g_expoHi : before);
-                f[150] = after;
-                if (after != before && g_expoLogs < 12) {
-                    g_expoLogs++;
-                    Log("[GP] exposure CLAMPED %.4f -> %.4f (hi %.3f)\n", before, after, g_expoHi);
+                // Always sample a few hits so GP_shader.log proves size/f150 even when
+                // the value sits inside [lo,hi] and no clamp fires.
+                if (expoHits <= 4 || (expoHits % 400) == 0) {
+                    Log("[GP] expo hit #%d n=%u f150=%.4f lo=%.3f hi=%.3f\n",
+                        expoHits, n, before, g_expoLo, g_expoHi);
+                }
+                // Size 1696 is shared by multiple CBs. Only touch values that look
+                // like an AE/exposure scalar; leave matrix junk (e.g. 112) alone —
+                // clamping those was observed to corrupt sky/atmosphere.
+                const bool plausible = (before >= 0.02f && before <= 8.0f);
+                if (plausible && g_expoHi > g_expoLo) {
+                    float after = before < g_expoLo ? g_expoLo : (before > g_expoHi ? g_expoHi : before);
+                    f[150] = after;
+                    if (after != before && g_expoLogs < 12) {
+                        g_expoLogs++;
+                        Log("[GP] exposure CLAMPED %.4f -> %.4f (hi %.3f)\n", before, after, g_expoHi);
+                    }
+                } else if (!plausible && (expoHits <= 8 || (expoHits % 2000) == 0)) {
+                    Log("[GP] expo skip non-AE f150=%.4f (shared cb size %u)\n", before, g_expoSize);
                 }
             }
             if (g_maps[i].size == 224 && n >= 40) {
@@ -885,8 +901,20 @@ static void DepthProbe()
     }
     g_ctx->Unmap(g_depthStaging, 0);
     float spread = mx - mn;
-    Log("[GP] depth probe fmt=%d min=%.4f max=%.4f avg=%.4f spread=%.4f\n",
-        (int)sd.Format, mn, mx, cnt ? sum / cnt : -1.0f, spread);
+    // Scene depth in Arma packs sky at ~1.0. Some views (Eden ocean/clouds) top
+    // out lower — treat "near the frame max" as sky instead of requiring 1.0.
+    g_depthMax = mx;
+    if (mx >= 0.995f) g_skyThr = 0.992f;
+    else if (mx >= 0.90f) g_skyThr = mx - 0.006f;
+    else g_skyThr = 0.992f; // weird buffer: keep conservative absolute thr
+    bool sane = (mx >= 0.990f) && (spread > 1e-4f);
+    if (sane != g_depthSane && g_depthInsaneLogs < 8) {
+        g_depthInsaneLogs++;
+        Log("[GP] depth sane %d -> %d (max=%.4f skyThr=%.4f)\n", (int)g_depthSane, (int)sane, mx, g_skyThr);
+    }
+    g_depthSane = sane;
+    Log("[GP] depth probe fmt=%d min=%.4f max=%.4f avg=%.4f spread=%.4f sane=%d skyThr=%.4f\n",
+        (int)sd.Format, mn, mx, cnt ? sum / cnt : -1.0f, spread, (int)g_depthSane, g_skyThr);
     if (g_presentCount > 60) {
         if (spread < 1e-5f) {
             if (++g_flatStreak >= 3) {
@@ -1112,12 +1140,15 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
             bb->Release();
         }
 
+        // Always composite when depth is ready. Sky is protected in-shader via
+        // g_skyThr (derived from probe max) — do not hard-disable the whole pass.
         if (g_depthReady && g_depthSRV && g_vs && g_psAO && g_cb && g_colorSRV && g_bbW && g_bbH) {
             g_probeInsertOk++;
             float prm[12];
             prm[0] = g_aoStrength; prm[1] = g_aoRadius; prm[2] = g_aoProjK; prm[3] = (float)g_presentMode;
             prm[4] = 1.0f / (float)g_bbW; prm[5] = 1.0f / (float)g_bbH;
-            prm[6] = (float)(g_presentCount & 7) * 0.5f; prm[7] = 0.0f;
+            prm[6] = (float)(g_presentCount & 7) * 0.5f;
+            prm[7] = g_skyThr;   // g_p1.w — sky/far reject threshold
             prm[8] = g_lightX; prm[9] = g_lightY; prm[10] = g_lightZ; prm[11] = g_contactSteps;
             g_ctx->UpdateSubresource(g_cb, 0, nullptr, prm, 0, 0);
 
@@ -1166,8 +1197,10 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
         }
         g_presentCount++;
         if (g_presentCount < 4 || (g_presentCount % 300) == 0)
-            Log("[GP] present %d depth=%d mode=%d ms=%d builds=%d\n", g_presentCount, (int)(g_depthReady ? 1 : 0), g_presentMode, (int)g_depthIsMS, g_depthBuilds);
-        if (g_presentCount <= 3 || (g_presentCount % 120) == 0) DepthProbe();
+            Log("[GP] present %d depth=%d mode=%d ms=%d builds=%d skyThr=%.4f\n",
+                g_presentCount, (int)(g_depthReady ? 1 : 0), g_presentMode, (int)g_depthIsMS, g_depthBuilds, g_skyThr);
+        // Probe often enough that skyThr tracks view changes (Eden ocean <-> land).
+        if (g_presentCount <= 3 || (g_presentCount % 30) == 0) DepthProbe();
     } else if (g_presentReady && g_presentMode != 2) {
         g_probeInsertFail++;
     }

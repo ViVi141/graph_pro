@@ -108,9 +108,10 @@
 - 逐项排除：AO（天空 d=1.0 直接跳过）、环境光注入（`GP_amb.txt` 改 0 0 后天空无变化）。
 - **真因：`mission/init.sqf` 第 21 行 `setDate [2035, 7, 12, 18, 10]` —— 18:10 黄昏，逆光云本就接近全黑。**不是 bug。
 
-### 下一步
-1. 曝光接管：`Hook_Unmap` 已加常量缓冲尺寸日志，用于定位 `PSCB_PostProcess`（cb13）并钳制 `c[37].z` 自动曝光，目标是拉开室内外对比。
-2. 接触阴影需要 G-buffer 法线或物体变换，属 B 档（D3D12 共享 + 自建 BVH）范畴。
+### 下一步（已由 2026-10-23 v1 承接）
+1. ~~曝光接管~~ → 见下文「屏幕空间旁路 v1」E0。
+2. ~~接触阴影必须 G-buffer~~ → **作废**：docs/12 + `fullscreen.hlsl` 的屏幕空间接触阴影只需深度 + 光向（无 G-buffer）。真光追/BVH 仍属 B 档，与 v1 无关。
+
 ## 2026-10-22 05:05 镜面注入：实测判定为负收益，已关闭
 
 ### A/B 方法
@@ -195,3 +196,36 @@
 而真正独有、游戏无任何对应开关的仍是两项：**自动曝光上限钳制**、**环境光缩放/色温**。
 
 保留 tonemap 替换；若日后要精简，优先考虑砍掉它与 SSAO 替换，保留曝光与环境光。
+
+## 2026-10-23 屏幕空间旁路 v1（E0 / E1 / E2）
+
+锁定目标（docs/12）：**深度接触阴影 + 曝光钳制 + ACES / 环境光**。
+
+### E0 · 曝光钳制验收
+
+| 项 | 结论 |
+|---|---|
+| 缓冲身份 | `GP_expo.txt` size=**1696** → Map/Unmap 命中 `PSCB_PostProcess` |
+| 槽位 | float 下标 **150** = HLSL `c[37].z`（tonemap 场景曝光乘子） |
+| A/B（同机位室内窗景） | `hi=1.10`：wall 0.21 / mean 0.19；`hi=0.30`：wall 0.05 / mean 0.04（`frac<0.02` 5.6%→54.6%） |
+| 出货默认 | `1696 0 1.10`（机制已证；户外不过度压暗） |
+| 紧档实验 | `presets/GP_expo_tight.txt` = `1696 0 0.55`（不随 deploy 覆盖） |
+| 图 | `demo/expo-ab-compare.png` |
+| 代码 | Unmap 增加周期性 `expo hit` 日志，即使未越界也能证明命中 |
+
+### E1 · 接触阴影产品化
+
+| 项 | 结论 |
+|---|---|
+| 算法 | `ContactShadow` UV 沿光向行进；远场 `z0>200` 早退 |
+| debug | mode **4** = `GP_present_contact.txt`（红遮挡） |
+| 出货 | mode **0** · `GP_present.txt` = `0 0.45 1.20 600 0.30` |
+| 关闭 | `GP_present_off.txt` → 复制为 `GP_present.txt` |
+| 离线 A/B | `demo/ab-contact-off-vs-on.png`、`demo/ab-contact-debug.png`、`demo/contact-shadow-smoke.png`（mean_occ≈0.49） |
+| 光向 | `GP_light.txt` = `0.35 -0.75 0 8`（手调） |
+
+### E2 · 打包
+
+- `inject/deploy.ps1` 部署 v1 默认集；跳过 debug/tight/example，避免盖掉 mode0。
+- README / `inject/README.md` 已同步；`demo/ab-side-by-side.png` 已重生（vanilla vs 当前注入成像）。
+- 引擎内总览：部署后跑 GP Shot，确认 `GP_shader.log` 含 `expo hit` 与 `present mode 0`。

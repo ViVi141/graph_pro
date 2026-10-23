@@ -46,7 +46,7 @@ randomSeed=271828;
 class ScenarioData
 {
 	author="GraphPro";
-	overviewText="Held-out Stratis scenes for YOLO accuracy.";
+		overviewText="Fixed vantage for injection A/B (no in-game filters).";
 };
 class Intro
 {
@@ -72,7 +72,7 @@ class Mission
 	class Intel
 	{
 		briefingName="GP Shot 2";
-		overviewText="Fixed vantage screenshot rig.";
+		overviewText="Fixed vantage; one baseline shot. Toggle d3d11 for A/B.";
 		resistanceWest=0;
 		startWeather=0.25;
 		startWind=0.1;
