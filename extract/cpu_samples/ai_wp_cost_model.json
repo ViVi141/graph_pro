@@ -1,0 +1,262 @@
+{
+  "protocol": {
+    "exe": "arma3server_x64",
+    "mission": "GP_ServerTest.Altis",
+    "metric": "gpsample exe_fn / exe_pct (interval 50ms, ~55s)",
+    "per_group": 4,
+    "note": "diag_fps is NOT used (\u224828 constant on this DS)"
+  },
+  "rows": [
+    {
+      "groups": 0,
+      "per_group": 4,
+      "units": 1,
+      "wp_mode": "cycle2",
+      "wp_per_group": 2,
+      "wp_total": 0,
+      "total_hits": 8559,
+      "exe_fn": 3,
+      "exe_pct": 0.0584,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 1,
+      "units_ai": 0
+    },
+    {
+      "groups": 8,
+      "per_group": 4,
+      "units": 33,
+      "wp_mode": "cycle2",
+      "wp_per_group": 2,
+      "wp_total": 16,
+      "total_hits": 30831,
+      "exe_fn": 67,
+      "exe_pct": 0.2692,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 1,
+      "units_ai": 32
+    },
+    {
+      "groups": 16,
+      "per_group": 4,
+      "units": 65,
+      "wp_mode": "cycle2",
+      "wp_per_group": 2,
+      "wp_total": 32,
+      "total_hits": 30548,
+      "exe_fn": 114,
+      "exe_pct": 0.4288,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 1,
+      "units_ai": 64
+    },
+    {
+      "groups": 24,
+      "per_group": 4,
+      "units": 97,
+      "wp_mode": "cycle2",
+      "wp_per_group": 2,
+      "wp_total": 48,
+      "total_hits": 29934,
+      "exe_fn": 202,
+      "exe_pct": 0.7517,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 1,
+      "units_ai": 96
+    },
+    {
+      "groups": 32,
+      "per_group": 4,
+      "units": 129,
+      "wp_mode": "cycle2",
+      "wp_per_group": 2,
+      "wp_total": 64,
+      "total_hits": 29162,
+      "exe_fn": 295,
+      "exe_pct": 1.1042,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 1,
+      "units_ai": 128
+    },
+    {
+      "groups": 48,
+      "per_group": 4,
+      "units": 193,
+      "wp_mode": "cycle2",
+      "wp_per_group": 2,
+      "wp_total": 96,
+      "total_hits": 28328,
+      "exe_fn": 522,
+      "exe_pct": 2.0157,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 1,
+      "units_ai": 192
+    },
+    {
+      "groups": 24,
+      "per_group": 4,
+      "units": 97,
+      "wp_mode": "cycle4",
+      "wp_per_group": 5,
+      "wp_total": 120,
+      "total_hits": 29761,
+      "exe_fn": 210,
+      "exe_pct": 0.8031,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 1,
+      "units_ai": 96
+    },
+    {
+      "groups": 24,
+      "per_group": 4,
+      "units": 97,
+      "wp_mode": "move1",
+      "wp_per_group": 1,
+      "wp_total": 24,
+      "total_hits": 29761,
+      "exe_fn": 207,
+      "exe_pct": 0.7527,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 1,
+      "units_ai": 96
+    },
+    {
+      "groups": 8,
+      "per_group": 4,
+      "units": 33,
+      "wp_mode": "none",
+      "wp_per_group": 0,
+      "wp_total": 0,
+      "total_hits": 30502,
+      "exe_fn": 18,
+      "exe_pct": 0.0623,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 0,
+      "units_ai": 32
+    },
+    {
+      "groups": 16,
+      "per_group": 4,
+      "units": 65,
+      "wp_mode": "none",
+      "wp_per_group": 0,
+      "wp_total": 0,
+      "total_hits": 30317,
+      "exe_fn": 50,
+      "exe_pct": 0.2045,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 0,
+      "units_ai": 64
+    },
+    {
+      "groups": 24,
+      "per_group": 4,
+      "units": 97,
+      "wp_mode": "none",
+      "wp_per_group": 0,
+      "wp_total": 0,
+      "total_hits": 26712,
+      "exe_fn": 64,
+      "exe_pct": 0.2957,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 0,
+      "units_ai": 96
+    },
+    {
+      "groups": 48,
+      "per_group": 4,
+      "units": 193,
+      "wp_mode": "none",
+      "wp_per_group": 0,
+      "wp_total": 0,
+      "total_hits": 30358,
+      "exe_fn": 181,
+      "exe_pct": 0.6852,
+      "sample_sec": 55,
+      "interval_ms": 50,
+      "moving": 0,
+      "units_ai": 192
+    }
+  ],
+  "models": {
+    "cycle2_exe_fn_vs_units": {
+      "a": 2.6852678571428577,
+      "b": -28.64285714285708,
+      "r2": 0.975545980811955,
+      "rmse": 26.828822454325387,
+      "n": 6
+    },
+    "none_exe_fn_vs_units": {
+      "a": 1.0200892857142851,
+      "b": -19.678571428571445,
+      "r2": 0.9821601984551536,
+      "rmse": 8.230496426617986,
+      "n": 4
+    },
+    "two_factor_exe_fn": {
+      "coef": {
+        "intercept": -28.287577992059024,
+        "units": 1.0846568349404424,
+        "units_x_moving": 1.5516254254112316
+      },
+      "r2": 0.9770303005920747,
+      "rmse": 21.121444748106267,
+      "n": 12
+    },
+    "g24_moving_exe_fn_vs_wp_total": {
+      "a": 0.04967948717948642,
+      "b": 203.15384615384613,
+      "r2": 0.3771585557299827,
+      "rmse": 2.6042371785325735,
+      "n": 3
+    },
+    "cycle2_exe_pct_vs_units": {
+      "a": 0.01011370535714286,
+      "b": -0.09170285714285732,
+      "r2": 0.9631915875536318,
+      "rmse": 0.12476427459126951,
+      "n": 6
+    },
+    "none_exe_pct_vs_units": {
+      "a": 0.0038537946428571414,
+      "b": -0.05803928571428586,
+      "r2": 0.9974898081510607,
+      "rmse": 0.011573688602046567,
+      "n": 4
+    },
+    "two_factor_exe_pct": {
+      "coef": {
+        "intercept": -0.09340519001701657,
+        "units": 0.004119038925127623,
+        "units_x_moving": 0.005782454445547364
+      },
+      "r2": 0.9660766690700513,
+      "rmse": 0.09686404804248265,
+      "n": 12
+    },
+    "g24_moving_exe_pct_vs_wp_total": {
+      "a": 0.0005685897435897417,
+      "b": 0.7327769230769228,
+      "r2": 0.9341198707757841,
+      "rmse": 0.006159587065746627,
+      "n": 3
+    }
+  },
+  "marginal_cost": {
+    "exe_fn_per_moving_unit": 2.6852678571428577,
+    "exe_fn_per_standing_unit": 1.0200892857142851,
+    "exe_pct_per_moving_unit": 0.01011370535714286,
+    "exe_pct_per_standing_unit": 0.0038537946428571414,
+    "move_vs_stand_ratio": 2.6323851203501114
+  }
+}

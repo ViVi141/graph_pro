@@ -1,0 +1,13 @@
+﻿{
+    "groups":  24,
+    "per_group":  4,
+    "units":  97,
+    "wp_mode":  "cycle2",
+    "wp_per_group":  2,
+    "wp_total":  48,
+    "total_hits":  29934,
+    "exe_fn":  202,
+    "exe_pct":  0.7517,
+    "sample_sec":  55,
+    "interval_ms":  50
+}

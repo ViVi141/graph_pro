@@ -51,7 +51,7 @@
 | `mission/` | SP 截图任务 `GP_Shot2` / `GP_Min`；无头 DS `GP_ServerTest.Altis` |
 | `server/` | DS 配置 + `run-cpu-sample.ps1` / `ab-soft-levers.ps1` |
 | `tools/` | 解包、反汇编、图像对比、server Top 命名、simstep 分析 |
-| `docs/` | 门禁文档（`13` CPU 客户端、`15` 管线地图、`16` 无头软杠杆） |
+| `docs/` | 门禁文档；社区博客见 `docs/blog-arma-optimization.md` |
 | `demo/` | A/B 图/HTML（PNG/MP4 不入库） |
 | `extract/` | 采样笔记与 A/B JSON；大 `.shdc` / 时间戳 dump 不入库 |
 

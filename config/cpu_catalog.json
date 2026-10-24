@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "notes": [
+    "passmark_st = CPU Single Thread Rating (cpu.userbenchmark / PassMark CPU ST).",
+    "Reference machine must be calibrated once: play the mission (or YAAB) and set budgets.",
+    "Until calibrated, verdicts are RELATIVE only (vs reference ST), not absolute FPS."
+  ],
+  "reference": {
+    "id": "this_pc",
+    "label": "本机校准机（请改 passmark_st / budgets）",
+    "passmark_st": 0,
+    "role": "both",
+    "budgets": {
+      "comment": "Max standing-equivalent units (SEU) still smooth on THIS machine. SEU = U_stand + 2.63*U_move",
+      "client_smooth_seu": 0,
+      "client_playable_seu": 0,
+      "server_ok_seu": 0
+    },
+    "calibration_hint": {
+      "k_move": 2.63,
+      "source": "docs/17-ai-wp-cost-table.md",
+      "how": "在本机跑目标任务或 YAAB，记下仍流畅的最大移动/站岗 AI，填入 budgets；passmark_st 填单线程分。"
+    }
+  },
+  "cpus": [
+    {"id": "r5_5600", "label": "Ryzen 5 5600", "passmark_st": 3250},
+    {"id": "r5_7600", "label": "Ryzen 5 7600", "passmark_st": 3900},
+    {"id": "r7_5800x", "label": "Ryzen 7 5800X", "passmark_st": 3450},
+    {"id": "r7_7700", "label": "Ryzen 7 7700", "passmark_st": 4100},
+    {"id": "r9_7900x", "label": "Ryzen 9 7900X", "passmark_st": 4300},
+    {"id": "i5_12400f", "label": "Core i5-12400F", "passmark_st": 3450},
+    {"id": "i5_14600k", "label": "Core i5-14600K", "passmark_st": 3900},
+    {"id": "i7_13700k", "label": "Core i7-13700K", "passmark_st": 4300},
+    {"id": "laptop_i7_11800h", "label": "Laptop i7-11800H", "passmark_st": 2800},
+    {"id": "laptop_r7_6800h", "label": "Laptop Ryzen 7 6800H", "passmark_st": 3100}
+  ]
+}

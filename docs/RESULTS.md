@@ -341,3 +341,12 @@ Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天�
 
 全文：[16-cpu-server-soft-levers.md](16-cpu-server-soft-levers.md) · 数据：`extract/cpu_samples/ab_soft_levers_summary.json`  
 脚本：`server/run-cpu-sample.ps1` · `server/ab-soft-levers.ps1`
+
+### AI×路点开销函数（同日续）
+
+网格 + 拟合：[17-ai-wp-cost-table.md](17-ai-wp-cost-table.md)
+
+- 巡逻：`exe_fn ≈ 2.69·U − 28.6`（R²≈0.98）
+- 站岗：`exe_fn ≈ 1.02·U − 19.7`（R²≈0.98）
+- 双因子：`exe_fn ≈ −28.3 + 1.09·U + 1.55·(U·M)`（M=是否移动）
+- 固定 96 人时 wp 条数 1/2/5 → exe_fn 207/202/210（路点个数 **非**主因）
