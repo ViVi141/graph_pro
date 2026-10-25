@@ -1,0 +1,58 @@
+{
+  "shots": {
+    "latest_inj": {
+      "mean": 0.752,
+      "std": 0.1758,
+      "p05": 0.3661,
+      "p95": 0.9168,
+      "dark": 4.53,
+      "blown": 0.5,
+      "sat": 0.1339,
+      "sharp": 0.04035
+    },
+    "latest_inj_b": {
+      "mean": 0.752,
+      "std": 0.1758,
+      "p05": 0.366,
+      "p95": 0.9168,
+      "dark": 4.53,
+      "blown": 0.5,
+      "sat": 0.1339,
+      "sharp": 0.04034
+    },
+    "vanilla": {
+      "mean": 0.7789,
+      "std": 0.1368,
+      "p05": 0.4781,
+      "p95": 0.9117,
+      "dark": 1.24,
+      "blown": 0.12,
+      "sat": 0.0951,
+      "sharp": 0.02357
+    },
+    "inj_ref": {
+      "mean": 0.7524,
+      "std": 0.1755,
+      "p05": 0.3666,
+      "p95": 0.9168,
+      "dark": 4.51,
+      "blown": 0.5,
+      "sat": 0.1336,
+      "sharp": 0.04036
+    }
+  },
+  "compare": {
+    "latest_inj_vs_latest_inj_b": {
+      "mae_0_255": 0.806,
+      "corr_gray": 0.99973
+    },
+    "latest_inj_vs_vanilla": {
+      "mae_0_255": 9.105,
+      "corr_gray": 0.99432
+    },
+    "latest_inj_vs_inj_ref": {
+      "mae_0_255": 2.955,
+      "corr_gray": 0.99617
+    }
+  }
+}

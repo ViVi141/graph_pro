@@ -41,6 +41,17 @@ static float g_expoHiHi = 1.10f;  // hi when frame is dark
 static float g_expoHiEff = 1.10f;
 static float g_frameLuma = -1.0f;
 static int   g_expoLogs = 0;
+// Scene-adaptive AgX scheduling (GP_adapt.txt): measures the final frame's
+// highlight pressure and eases AgX toward a sky-safe exposure/contrast.
+static int   g_adaptOn = 1;
+static float g_adapt = 0.0f;              // 0 = street look, 1 = sky-safe
+static float g_adaptBlownTarget = 0.02f;  // fraction of clipped pixels
+static float g_adaptTopTarget = 0.50f;    // fraction of bright top-band pixels
+static float g_adaptRate = 0.25f;
+static float g_sceneBlown = 0.0f;
+static float g_sceneTopBright = 0.0f;
+static int   g_statsFrame = 0;
+static int   g_adaptLogs = 0;
 static UINT  g_cbTrackSize[4] = { 0, 0, 0, 0 };
 static int   g_cbTrackSlot[4] = { -1, -1, -1, -1 };
 static int   g_cbTrackCount[4] = { 0, 0, 0, 0 };
@@ -331,6 +342,21 @@ static void ParseLightBindFile(FILE* bf)
     }
 }
 
+// GP_adapt.txt: enable blownTarget topBrightTarget blendRate
+static void ParseAdaptFile(FILE* af)
+{
+    int en = g_adaptOn;
+    float bt = g_adaptBlownTarget, tt = g_adaptTopTarget, rate = g_adaptRate;
+    int got = fscanf(af, "%d %f %f %f", &en, &bt, &tt, &rate);
+    if (got >= 1) g_adaptOn = en;
+    if (got >= 2) g_adaptBlownTarget = bt;
+    if (got >= 3) g_adaptTopTarget = tt;
+    if (got >= 4) g_adaptRate = rate;
+    if (g_adaptRate <= 0.0f || g_adaptRate > 1.0f) g_adaptRate = 0.25f;
+    if (g_adaptBlownTarget < 0.0f) g_adaptBlownTarget = 0.0f;
+    if (g_adaptTopTarget < 0.0f) g_adaptTopTarget = 0.0f;
+}
+
 static void LoadConfig()
 {
     std::string dir = ExeDir();
@@ -397,6 +423,12 @@ static void LoadConfig()
         if (g_cbDumpOn)
             Log("[GP] cb dump ON min=%u max=%u every=%d maxFiles=%d\n",
                 g_cbDumpMin, g_cbDumpMax, g_cbDumpEvery, g_cbDumpMaxFiles);
+    }
+    {
+        FILE* af = fopen((dir + "\\GP_adapt.txt").c_str(), "r");
+        if (af) { ParseAdaptFile(af); fclose(af); }
+        Log("[GP] adapt %d blownTarget %.3f topTarget %.3f rate %.2f\n",
+            g_adaptOn, g_adaptBlownTarget, g_adaptTopTarget, g_adaptRate);
     }
 }
 
@@ -593,6 +625,13 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                         g_expoLogs++;
                         Log("[GP] exposure CLAMPED %.4f -> %.4f (hi %.3f) fp-ok\n", before, after, hi);
                     }
+                }
+                // Feed the AgX scene-adaptive look through unused c[80].
+                if (fp && n > 323) {
+                    f[320] = g_adapt;
+                    f[321] = g_sceneBlown;
+                    f[322] = g_sceneTopBright;
+                    f[323] = 0.0f;
                 }
             }
             if (g_maps[i].size == 224 && n >= 40) {
@@ -1558,38 +1597,92 @@ static void ReloadPresentCfg()
     RefreshProbeMrtFlag();
 }
 
-static void SampleFrameLuma()
+static bool EnsureLumaStaging()
 {
-    if (!g_expoAdapt || !g_dev || !g_ctx || !g_colorTex || !g_bbW || !g_bbH) return;
-    if ((g_presentCount % 30) != 0) return;
+    if (!g_dev || !g_colorTex) return false;
     D3D11_TEXTURE2D_DESC cd{}; g_colorTex->GetDesc(&cd);
-    if (!g_lumaStaging) {
-        D3D11_TEXTURE2D_DESC st = cd;
-        st.Usage = D3D11_USAGE_STAGING; st.BindFlags = 0;
-        st.CPUAccessFlags = D3D11_CPU_ACCESS_READ; st.MiscFlags = 0;
-        if (FAILED(g_dev->CreateTexture2D(&st, nullptr, &g_lumaStaging))) return;
+    if (g_lumaStaging) {
+        D3D11_TEXTURE2D_DESC sd{}; g_lumaStaging->GetDesc(&sd);
+        if (sd.Width == cd.Width && sd.Height == cd.Height) return true;
+        g_lumaStaging->Release(); g_lumaStaging = nullptr;
     }
+    D3D11_TEXTURE2D_DESC st = cd;
+    st.Usage = D3D11_USAGE_STAGING; st.BindFlags = 0;
+    st.CPUAccessFlags = D3D11_CPU_ACCESS_READ; st.MiscFlags = 0;
+    return SUCCEEDED(g_dev->CreateTexture2D(&st, nullptr, &g_lumaStaging)) && g_lumaStaging;
+}
+
+// Sample the finished frame and drive the scene-adaptive AgX look. The proxy
+// writes g_adapt into PSCB_PostProcess c[80].x; the AgX shader reads it.
+static void SampleSceneStats()
+{
+    if (!g_dev || !g_ctx || !g_colorTex || !g_bbW || !g_bbH) return;
+    if (!EnsureLumaStaging()) return;
+    D3D11_TEXTURE2D_DESC cd{}; g_colorTex->GetDesc(&cd);
     g_ctx->CopyResource(g_lumaStaging, g_colorTex);
     D3D11_MAPPED_SUBRESOURCE m{};
     if (FAILED(g_ctx->Map(g_lumaStaging, 0, D3D11_MAP_READ, 0, &m))) return;
-    double sum = 0.0; int cnt = 0;
-    for (int gy = 1; gy <= 6; gy++) {
-        for (int gx = 1; gx <= 8; gx++) {
-            UINT px = (UINT)((float)cd.Width * gx / 9.0f);
-            UINT py = (UINT)((float)cd.Height * gy / 7.0f);
+
+    // 64x36 grid is dense enough for %-clipped and top-band stats, cheap to read.
+    const int GW = 64, GH = 36;
+    bool rgba = (cd.Format == DXGI_FORMAT_R8G8B8A8_UNORM || cd.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    double sum = 0.0;
+    int cnt = 0, blown = 0, topN = 0, topBright = 0;
+    const int topRows = GH * 35 / 100;
+    for (int gy = 0; gy < GH; gy++) {
+        for (int gx = 0; gx < GW; gx++) {
+            UINT px = (UINT)((float)cd.Width * ((float)gx + 0.5f) / (float)GW);
+            UINT py = (UINT)((float)cd.Height * ((float)gy + 0.5f) / (float)GH);
             const uint8_t* p = (const uint8_t*)m.pData + (size_t)py * m.RowPitch + (size_t)px * 4;
-            // Backbuffer is typically B8G8R8A8.
-            float b = p[0] / 255.0f, g = p[1] / 255.0f, r = p[2] / 255.0f;
-            sum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            cnt++;
+            float r = rgba ? p[0] / 255.0f : p[2] / 255.0f;
+            float g = p[1] / 255.0f;
+            float b = rgba ? p[2] / 255.0f : p[0] / 255.0f;
+            float l = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+            float mx = r > g ? r : g; if (b > mx) mx = b;
+            sum += l; cnt++;
+            if (mx >= 0.98f) blown++;
+            if (gy < topRows) {
+                topN++;
+                if (l > 0.85f) topBright++;
+            }
         }
     }
     g_ctx->Unmap(g_lumaStaging, 0);
     if (!cnt) return;
-    g_frameLuma = (float)(sum / cnt);
+
+    g_frameLuma = (float)(sum / (double)cnt);
+    g_sceneBlown = (float)blown / (float)cnt;
+    g_sceneTopBright = topN ? (float)topBright / (float)topN : 0.0f;
+
+    if (g_adaptOn) {
+        float stress = 0.0f;
+        if (g_sceneBlown > g_adaptBlownTarget) {
+            float s = (g_sceneBlown - g_adaptBlownTarget) / 0.05f;
+            if (s > stress) stress = s;
+        }
+        if (g_sceneTopBright > g_adaptTopTarget) {
+            float s = (g_sceneTopBright - g_adaptTopTarget) / 0.25f;
+            if (s > stress) stress = s;
+        }
+        if (stress > 1.0f) stress = 1.0f;
+        // Fast attack, slow release: avoid pumping between sky-heavy and street views.
+        float k = (stress > g_adapt) ? g_adaptRate : 0.05f;
+        g_adapt += (stress - g_adapt) * k;
+        if (g_adapt < 0.0f) g_adapt = 0.0f; else if (g_adapt > 1.0f) g_adapt = 1.0f;
+    } else {
+        g_adapt = 0.0f;
+    }
+
+    // Keep the existing adaptive-exposure behaviour if GP_expo adapt=1.
     float t = (g_expoTarget - g_frameLuma) / 0.35f;
     if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
     g_expoHiEff = g_expoHiLo + (g_expoHiHi - g_expoHiLo) * t;
+
+    if (g_adaptLogs < 8 || (g_statsFrame % 300) == 0) {
+        g_adaptLogs++;
+        Log("[GP] adapt top=%.3f blown=%.3f a=%.3f\n",
+            g_sceneTopBright, g_sceneBlown, g_adapt);
+    }
 }
 
 // Touch GP_dump.txt and the next presented frame is written out as
@@ -1710,6 +1803,17 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
         }
     }
     if (!g_presentReady) EnsurePresentResources(sc);
+    // Scene stats must run even while the Present contact pass is shelved
+    // (mode 2), because the adaptive AgX controller still needs them.
+    g_statsFrame++;
+    if (g_presentReady && g_ctx && g_colorTex && sc && (g_statsFrame % 15) == 0) {
+        ID3D11Texture2D* sbb = nullptr;
+        if (SUCCEEDED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&sbb)) && sbb) {
+            g_ctx->CopyResource(g_colorTex, sbb);
+            sbb->Release();
+            SampleSceneStats();
+        }
+    }
     if (g_presentReady && g_ctx && g_bbTex && g_presentMode != 2) {
         if (g_nRejected && (g_presentCount % 600) == 0) { g_nRejected = 0; Log("[GP] depth rejections cleared\n"); }
         UpdateDepthView();
@@ -1725,7 +1829,6 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
         // Also force opaque blend — leftover game blend states black out the sky.
         if (g_depthReady && g_depthSane && g_depthSRV && g_vs && g_psAO && g_cb && g_colorSRV && g_bbW && g_bbH) {
             g_probeInsertOk++;
-            SampleFrameLuma();
 
             float lx = g_lightX, ly = g_lightY, lz = g_lightZ;
             if (g_lightAuto && g_lightAutoValid) {
