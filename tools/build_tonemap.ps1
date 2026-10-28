@@ -39,7 +39,8 @@ $jobs = @(
     @{ Src = 'tonemap_agx.hlsl';         Out = 'GP_tonemap_agx.dxbc';         T = 'ps_4_0'; E = 'main'; O3 = $false },
     @{ Src = 'tonemap_agx_neutral.hlsl'; Out = 'GP_tonemap_agx_neutral.dxbc'; T = 'ps_4_0'; E = 'main'; O3 = $false },
     @{ Src = 'tonemap_aces.hlsl';        Out = 'GP_tonemap.dxbc';              T = 'ps_4_0'; E = 'main'; O3 = $false },
-    @{ Src = 'ssao_final.hlsl';          Out = 'GP_ssao.dxbc';                 T = 'ps_4_0'; E = 'main'; O3 = $false }
+    @{ Src = 'ssao_final.hlsl';          Out = 'GP_ssao.dxbc';                 T = 'ps_4_0'; E = 'main'; O3 = $false },
+    @{ Src = 'fsr1_easu.hlsl';           Out = 'GP_fsr1.dxbc';                 T = 'ps_4_0'; E = 'main'; O3 = $false }
 )
 
 foreach ($j in $jobs) {

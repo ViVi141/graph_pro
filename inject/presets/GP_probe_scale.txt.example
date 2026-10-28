@@ -19,10 +19,15 @@ so we need to know:
 How to use
 ----------
 1. Copy this file to the game directory as `GP_probe_scale.txt`.
+   IMPORTANT: enable the probe BEFORE launching the game. Shader recording is
+   gated on this file, so shaders created before it exists are unknown (psLen=0).
 2. In game, set Sampling (分辨率采样) to 70% or 50% — otherwise the input and
    output are the same size and nothing will match.
-3. Play a few seconds. Every 300 frames the proxy rewrites `GP_upscale.txt`.
-4. Read `GP_upscale.txt` next to the game exe.
+3. Play a few seconds. The proxy rewrites `GP_upscale.txt` every 300 frames.
+4. To force a report right now: create an empty `GP_upscale_dump.txt` beside the
+   exe. The report is rewritten once per second for as long as that file exists,
+   so you do not have to wait or quit the game.
+5. Read `GP_upscale.txt` next to the game exe.
 
 Reading the report
 ------------------
@@ -34,6 +39,12 @@ Reading the report
 If psCrc is non-zero, the report also prints a ready-to-paste GP_replace.txt
 line in GP_shader.log. The first field is the ORIGINAL shader size as the game
 passed it (use psLen from the report for that field).
+
+If psLen is 0 for a candidate:
+  - the probe was enabled after that shader was created -> restart the game
+    with GP_probe_scale.txt already in place, or
+  - the shader came from a device/context we do not hook.
+  The row is still a real upscale candidate by geometry; psKey identifies it.
 
 If the report says "No fullscreen pass with input < output was seen":
   - Sampling is probably 100% -> lower it and retry, or

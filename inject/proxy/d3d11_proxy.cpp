@@ -13,6 +13,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <utility>
 #include "../present/fullscreen_shaders.h"
 #include "cand_hooks.h"
 
@@ -20,6 +21,11 @@
 static HMODULE g_self = nullptr;
 static FILE* g_log = nullptr;
 static HMODULE g_real = nullptr;
+
+// renderWidth/renderHeight from Documents\Arma 3\Arma3.cfg, read once at load.
+// The upscale probe compares them against observed sizes to answer whether the
+// internal render resolution ever reaches a fullscreen draw.
+static UINT g_cfgRenderW = 0, g_cfgRenderH = 0;
 typedef HRESULT (WINAPI *PFN_CreateDevice)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*, UINT, UINT, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**);
 typedef HRESULT (WINAPI *PFN_CreateDeviceSwap)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*, UINT, UINT, const DXGI_SWAP_CHAIN_DESC*, IDXGISwapChain**, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**);
 static PFN_CreateDevice g_createDevice = nullptr;
@@ -126,6 +132,7 @@ static bool  g_probeOn = false;
 static bool  g_probeMrt = false;     // GP_probe_mrt.txt: RT/DS census + depth timeline
 static int   g_mrtPresentSeq = 0;
 static void  RefreshProbeMrtFlag();
+static int   ReassertPatches();
 static long  g_nQuad = 0;            // count==3/4/6 draws (PP fullscreen)
 static long  g_nGeom = 0;            // other index/vertex counts
 static long  g_nDrawImm = 0;
@@ -376,6 +383,27 @@ static void ParseAdaptFile(FILE* af)
     if (g_adaptTopTarget < 0.0f) g_adaptTopTarget = 0.0f;
 }
 
+// Read renderWidth/renderHeight from the user's Arma3.cfg. Best effort: if the
+// file is not where we expect, the probe simply cannot make the comparison.
+static void LoadArmaCfgRenderSize()
+{
+    char path[MAX_PATH]{};
+    DWORD n = GetEnvironmentVariableA("USERPROFILE", path, MAX_PATH);
+    if (!n || n >= MAX_PATH) return;
+    std::string p = std::string(path) + "\\Documents\\Arma 3\\Arma3.cfg";
+    FILE* f = fopen(p.c_str(), "r");
+    if (!f) return;
+    char line[512];
+    while (fgets(line, sizeof(line), f)) {
+        unsigned v = 0;
+        if (sscanf(line, "renderWidth=%u", &v) == 1) g_cfgRenderW = v;
+        else if (sscanf(line, "renderHeight=%u", &v) == 1) g_cfgRenderH = v;
+    }
+    fclose(f);
+    if (g_cfgRenderW && g_cfgRenderH)
+        Log("[GP] cfg render size %ux%u (from Arma3.cfg)\n", g_cfgRenderW, g_cfgRenderH);
+}
+
 static void LoadConfig()
 {
     std::string dir = ExeDir();
@@ -471,58 +499,222 @@ static PFN_CPS g_origCPS = nullptr;
 //
 // Detection: a full-screen draw whose *input* SRV is smaller than its *output*
 // RTV. Pure observation — nothing is modified, so this is safe to run in flight.
-struct PsSizeEntry { ID3D11PixelShader* ps; UINT size; uint32_t crc; };
-static PsSizeEntry g_psSizes[256];
+struct PsSizeEntry { ID3D11PixelShader* ps; UINT size; uint32_t crc; std::vector<uint8_t> bytes; };
+
+// Arma creates a large number of PS variants (that count is itself an open
+// question, see docs/10). A fixed 256-entry linear table filled up during the
+// first world load and then silently reported psLen=0 for every later pass --
+// exactly the case the upscale probe cares about. So: grow instead of drop.
+static PsSizeEntry* g_psSizes = nullptr;
 static int g_psCount = 0;
-static bool g_psOverflowLogged = false;
+static int g_psCap = 0;
+static UINT g_psBytesTotal = 0;
+
+// Open-addressing map keyed by shader pointer; an empty slot has ps == nullptr.
+static int PsHash(ID3D11PixelShader* ps, int cap)
+{
+    uint64_t v = (uint64_t)(uintptr_t)ps;
+    v ^= v >> 33; v *= 0xff51afd7ed558ccdULL; v ^= v >> 33;
+    return (int)(v & (uint64_t)(cap - 1));
+}
+
+static void PsMapGrow()
+{
+    const int newCap = g_psCap ? g_psCap * 2 : 1024;
+    PsSizeEntry* n = new PsSizeEntry[newCap];
+    for (int k = 0; k < newCap; k++) { n[k].ps = nullptr; n[k].size = 0; n[k].crc = 0; }
+    for (int k = 0; k < g_psCap; k++) {
+        if (!g_psSizes[k].ps) continue;
+        int i = PsHash(g_psSizes[k].ps, newCap);
+        while (n[i].ps) i = (i + 1) & (newCap - 1);
+        n[i] = std::move(g_psSizes[k]);   // moves the bytecode vector, no copy
+    }
+    delete[] g_psSizes;
+    g_psSizes = n;
+    g_psCap = newCap;
+}
 
 struct ScaleSeen {
     UINT inW, inH, outW, outH;
     UINT psSize;
     uint32_t psCrc;
+    uint64_t psKey;      // shader identity (pointer); crc may be 0 when unknown
     int fmtIn, fmtOut;
     long hits;
+    char via[32];        // which API produced this size change
 };
 static ScaleSeen g_scaleSeen[32];
 static int g_scaleSeenN = 0;
 static int g_scaleLogs = 0;
 static long g_scaleDraws = 0;
 static long g_scaleFullscreen = 0;
+static int g_scaleUnknownLogs = 0;
+
+// Size census: every distinct input and output size seen on fullscreen draws,
+// unfiltered. This is what tells us whether the internal render size (e.g.
+// 852x480) ever appears at all, and what the targets actually are.
+struct SizeCount { UINT w, h; long n; };
+static SizeCount g_censusOut[64];
+static int g_censusOutN = 0;
+static SizeCount g_censusIn[64];
+static int g_censusInN = 0;
+
+static void BumpSize(SizeCount* arr, int* n, UINT w, UINT h)
+{
+    for (int k = 0; k < *n; k++) {
+        if (arr[k].w == w && arr[k].h == h) { arr[k].n++; return; }
+    }
+    if (*n < 64) { arr[*n].w = w; arr[*n].h = h; arr[*n].n = 1; (*n)++; }
+}
 
 static bool g_probeScale = false;
+static void WriteScaleReport();
 
-static void NotePixelShader(ID3D11PixelShader* ps, UINT size, uint32_t crc)
+// Frame pass sequence: records the fullscreen passes of ONE frame in execution
+// order. This is what answers "does tonemap run before or after the stretch",
+// which decides whether an upscaler sees HDR or LDR input.
+static int g_seqFrame = 0;
+static int g_seqCount = 0;
+static bool g_seqDone = false;
+struct SeqEntry { uint32_t crc; UINT outW, outH; int fmtOut; UINT inW, inH; int fmtIn; UINT psLen; };
+static SeqEntry g_seq[256];
+
+static void RecordSeq(uint32_t crc, UINT inW, UINT inH, int fmtIn, UINT outW, UINT outH, int fmtOut, UINT psLen)
+{
+    if (g_seqDone || g_seqCount >= 256) return;
+    SeqEntry& e = g_seq[g_seqCount++];
+    e.crc = crc; e.inW = inW; e.inH = inH; e.fmtIn = fmtIn;
+    e.outW = outW; e.outH = outH; e.fmtOut = fmtOut; e.psLen = psLen;
+}
+
+static void DumpSeqOnce()
+{
+    if (g_seqDone || !g_seqCount) return;
+    g_seqDone = true;
+    FILE* f = fopen((ExeDir() + "\\GP_passseq.txt").c_str(), "w");
+    if (!f) return;
+    fprintf(f, "# fullscreen pass sequence, one frame, execution order\n");
+    fprintf(f, "# crc is from CreatePixelShader; size in bytes\n\n");
+    fprintf(f, "%-4s %-10s %-7s %-18s %-18s %s\n", "idx", "psCrc", "psLen", "input(SRV)", "output(RTV)", "fmt in/out");
+    for (int k = 0; k < g_seqCount; k++) {
+        const SeqEntry& e = g_seq[k];
+        fprintf(f, "%-4d %08X   %-7u %-6ux%-10u %-6ux%-10u %d/%d\n",
+                k, e.crc, e.psLen, e.inW, e.inH, e.outW, e.outH, e.fmtIn, e.fmtOut);
+    }
+    fclose(f);
+    Log("[GP] pass sequence written (%d passes)\n", g_seqCount);
+}
+
+// The stretch pass we located: 852x480 -> 1280x720, HDR (fmt 10) to LDR (fmt 28).
+// Its position relative to tonemap (5860/42670B06) decides whether an upscaler
+// would read HDR or LDR input.
+static const uint32_t kStretchCrc = 0xB682EAC0;
+static const uint32_t kTonemapCrc = 0x42670B06;
+
+static void AnalyzeSeqOrder()
+{
+    int stretchAt = -1, tonemapAt = -1, tonemapLenAt = -1;
+    for (int k = 0; k < g_seqCount; k++) {
+        if (g_seq[k].crc == kStretchCrc && stretchAt < 0) stretchAt = k;
+        if (g_seq[k].crc == kTonemapCrc && tonemapAt < 0) tonemapAt = k;
+        // Fall back to size: a replaced shader keeps the original crc, but if the
+        // table pointed at a different pass we still want to name it by length.
+        if (g_seq[k].psLen == 5860 && tonemapLenAt < 0) tonemapLenAt = k;
+    }
+    Log("[GP] pass order: tonemap crc-idx=%d len5860-idx=%d  stretch idx=%d\n",
+        tonemapAt, tonemapLenAt, stretchAt);
+
+    // Report the same-size passes right before the stretch: that is where a
+    // tonemap would sit, and listing them makes a missing 5860 obvious.
+    for (int k = 0; k < g_seqCount; k++) {
+        const SeqEntry& e = g_seq[k];
+        if (e.inW == e.outW && e.inH == e.outH && e.outW == g_cfgRenderW && e.outH == g_cfgRenderH) {
+            Log("[GP]   same-size pass idx=%d psLen=%u crc=%08X fmt %d->%d\n",
+                k, e.psLen, e.crc, e.fmtIn, e.fmtOut);
+        }
+    }
+
+    const int tm = (tonemapAt >= 0) ? tonemapAt : tonemapLenAt;
+    if (tm >= 0 && stretchAt >= 0) {
+        Log("[GP]   => tonemap runs %s the stretch; upscaler input would be %s\n",
+            tm < stretchAt ? "BEFORE" : "AFTER",
+            tm < stretchAt ? "LDR-tonemapped" : "HDR scene-linear");
+    } else if (stretchAt >= 0) {
+        Log("[GP]   stretch found but no tonemap pass (no 5860 B, no 42670B06) in this frame.\n");
+        Log("[GP]   => the 5860/42670B06 replacement may never execute; verify with GP_replace.txt removed.\n");
+    }
+}
+
+static void NotePixelShader(ID3D11PixelShader* ps, const void* data, UINT size, uint32_t crc)
 {
     if (!ps) return;
-    for (int k = 0; k < g_psCount; k++) {
-        if (g_psSizes[k].ps == ps) return;
+    // Unconditional: gating this on g_probeScale meant shaders created before
+    // the probe file existed were never recorded, and the probe then reported
+    // psLen=0 for exactly the passes it cares about. An O(1) hash hit is cheap
+    // enough to pay on every create.
+    if (!g_psCap) PsMapGrow();
+    if ((g_psCount + 1) * 10 >= g_psCap * 7) PsMapGrow();   // load factor < 0.7
+
+    int i = PsHash(ps, g_psCap);
+    while (g_psSizes[i].ps) {
+        if (g_psSizes[i].ps == ps) return;   // already recorded
+        i = (i + 1) & (g_psCap - 1);
     }
-    if (g_psCount < 256) {
-        // Hold a reference: without it the pointer can be recycled by another
-        // shader and the probe would report the wrong size/crc for a real hit.
-        // Bounded by the table size, lives for the process lifetime.
-        ps->AddRef();
-        g_psSizes[g_psCount].ps = ps;
-        g_psSizes[g_psCount].size = size;
-        g_psSizes[g_psCount].crc = crc;
-        g_psCount++;
-    } else if (!g_psOverflowLogged) {
-        g_psOverflowLogged = true;
-        Log("[GP] probe_scale: shader table full (256); later shaders will show psLen=0\n");
+    // Hold a reference: without it the pointer can be recycled by another
+    // shader and the probe would report the wrong size/crc for a real hit.
+    ps->AddRef();
+    g_psSizes[i].ps = ps;
+    g_psSizes[i].size = size;
+    g_psSizes[i].crc = crc;
+    // Keep the bytecode so a candidate can be dumped and disassembled offline.
+    // Budgeted: caching every variant's bytes is fine at a few hundred KB, but
+    // unbounded would grow with the shader set for no benefit.
+    if (data && size && g_psBytesTotal + size <= (16u << 20)) {
+        const uint8_t* p = (const uint8_t*)data;
+        g_psSizes[i].bytes.assign(p, p + size);
+        g_psBytesTotal += size;
     }
+    g_psCount++;
 }
 
 static bool LookupPixelShader(ID3D11PixelShader* ps, UINT* size, uint32_t* crc)
 {
-    if (!ps) return false;
-    for (int k = 0; k < g_psCount; k++) {
-        if (g_psSizes[k].ps == ps) {
-            if (size) *size = g_psSizes[k].size;
-            if (crc) *crc = g_psSizes[k].crc;
+    if (!ps || !g_psCap) return false;
+    int i = PsHash(ps, g_psCap);
+    while (g_psSizes[i].ps) {
+        if (g_psSizes[i].ps == ps) {
+            if (size) *size = g_psSizes[i].size;
+            if (crc) *crc = g_psSizes[i].crc;
             return true;
         }
+        i = (i + 1) & (g_psCap - 1);
     }
     return false;
+}
+
+// Write a candidate shader's bytecode next to the exe as GP_cand_<crc>.dxbc so it
+// can be disassembled with: fxc /dumpbin /nologo GP_cand_XXXXXXXX.dxbc
+static void DumpCandidateShader(ID3D11PixelShader* ps, uint32_t crc)
+{
+    if (!ps || !g_psCap) return;
+    int i = PsHash(ps, g_psCap);
+    while (g_psSizes[i].ps) {
+        if (g_psSizes[i].ps == ps) {
+            if (g_psSizes[i].bytes.empty()) return;
+            char name[64];
+            snprintf(name, sizeof(name), "\\GP_cand_%08X.dxbc", crc);
+            const std::string full = ExeDir() + name;
+            if (GetFileAttributesA(full.c_str()) != INVALID_FILE_ATTRIBUTES) return;  // once
+            FILE* f = fopen(full.c_str(), "wb");
+            if (f) {
+                fwrite(g_psSizes[i].bytes.data(), 1, g_psSizes[i].bytes.size(), f);
+                fclose(f);
+                Log("[GP] dumped candidate shader%s (%zu bytes)\n", name, g_psSizes[i].bytes.size());
+            }
+            return;
+        }
+        i = (i + 1) & (g_psCap - 1);
+    }
 }
 
 static void RefreshProbeScaleFlag()
@@ -532,6 +724,144 @@ static void RefreshProbeScaleFlag()
         g_probeScale = on;
         Log("[GP] probe_scale %s\n", on ? "ON" : "OFF");
     }
+}
+
+// Touch GP_upscale_dump.txt to write the report immediately (and keep writing
+// once per second while it exists). Without this you would have to wait up to
+// 300 frames, or quit the game, to see any result.
+static void CheckScaleDumpRequest()
+{
+    if (!g_probeScale) return;
+    const std::string trig = ExeDir() + "\\GP_upscale_dump.txt";
+    if (GetFileAttributesA(trig.c_str()) == INVALID_FILE_ATTRIBUTES) return;
+    static DWORD last = 0;
+    const DWORD now = GetTickCount();
+    if (last && (now - last) < 1000) return;
+    last = now;
+    WriteScaleReport();
+}
+
+// ---- copy / resolve hooks: catch upscaling that never goes through Draw ----
+// A stretch done by the runtime (IDXGISwapChain scaling, CopySubresourceRegion
+// with differing rects, or ResolveSubresource) is invisible to a Draw hook. If
+// the engine does its renderWidth -> backbuffer step this way, the upscale probe
+// must see it here instead.
+typedef void (STDMETHODCALLTYPE *PFN_CopyRes)(ID3D11DeviceContext*, ID3D11Resource*, ID3D11Resource*);
+// ID3D11DeviceContext::CopySubresourceRegion(Dst, DstSub, DstX, DstY, DstZ, Src, SrcSub, pSrcBox)
+typedef void (STDMETHODCALLTYPE *PFN_CopySub)(ID3D11DeviceContext*, ID3D11Resource*, UINT, UINT, UINT, UINT,
+                                              ID3D11Resource*, UINT, const D3D11_BOX*);
+typedef void (STDMETHODCALLTYPE *PFN_Resolve)(ID3D11DeviceContext*, ID3D11Resource*, UINT, ID3D11Resource*, UINT, DXGI_FORMAT);
+static PFN_CopyRes g_origCopyRes = nullptr;
+static PFN_CopySub g_origCopySub = nullptr;
+static PFN_Resolve g_origResolve = nullptr;
+static long g_scaleCopies = 0;
+
+static void RecordScaleCandidate(UINT inW, UINT inH, int fmtIn, UINT outW, UINT outH, int fmtOut,
+                                 const char* via, ID3D11PixelShader* ps)
+{
+    if (!inW || !inH || !outW || !outH) return;
+    if (inW >= outW || inH >= outH) return;
+
+    g_scaleDraws++;
+    UINT psSize = 0; uint32_t psCrc = 0;
+    // Key on the shader pointer, not the crc: an unrecorded shader has crc 0 and
+    // would otherwise merge every distinct unknown pass into one row.
+    // Copy/resolve paths pass nullptr, so they group together by size alone.
+    const uint64_t psKey = (uint64_t)(uintptr_t)ps;
+    if (ps) LookupPixelShader(ps, &psSize, &psCrc);
+
+    int slot = -1;
+    for (int k = 0; k < g_scaleSeenN; k++) {
+        if (g_scaleSeen[k].inW == inW && g_scaleSeen[k].inH == inH &&
+            g_scaleSeen[k].outW == outW && g_scaleSeen[k].outH == outH &&
+            g_scaleSeen[k].psKey == psKey) { slot = k; break; }
+    }
+    if (slot < 0 && g_scaleSeenN < 32) {
+        slot = g_scaleSeenN++;
+        g_scaleSeen[slot].inW = inW; g_scaleSeen[slot].inH = inH;
+        g_scaleSeen[slot].outW = outW; g_scaleSeen[slot].outH = outH;
+        g_scaleSeen[slot].psSize = psSize; g_scaleSeen[slot].psCrc = psCrc;
+        g_scaleSeen[slot].psKey = psKey;
+        g_scaleSeen[slot].fmtIn = fmtIn; g_scaleSeen[slot].fmtOut = fmtOut;
+        g_scaleSeen[slot].hits = 0;
+        snprintf(g_scaleSeen[slot].via, sizeof(g_scaleSeen[slot].via), "%s", via ? via : "?");
+        if (g_scaleLogs < 24) {
+            g_scaleLogs++;
+            Log("[GP] UPSCALE CANDIDATE %ux%u -> %ux%u fmt %d->%d psLen=%u psCrc=%08X via=%s\n",
+                inW, inH, outW, outH, fmtIn, fmtOut, psSize, psCrc, via ? via : "?");
+            if (psSize) {
+                // GP_replace.txt format is: <size> <crc> <payload>
+                // <size> must equal the length the GAME passes to CreatePixelShader,
+                // which is exactly psLen in this report.
+                Log("[GP]   -> GP_replace.txt: %u %08X <payload.dxbc>   (psLen %u, crc %08X)\n",
+                    psSize, psCrc, psSize, psCrc);
+            }
+        }
+        if (ps) DumpCandidateShader(ps, psCrc);
+    }
+    if (slot >= 0) g_scaleSeen[slot].hits++;
+}
+
+static void STDMETHODCALLTYPE Hook_CopyResource(ID3D11DeviceContext* ctx, ID3D11Resource* dst, ID3D11Resource* src)
+{
+    if (g_probeScale && dst && src) {
+        ID3D11Texture2D* a = nullptr; ID3D11Texture2D* b = nullptr;
+        if (SUCCEEDED(src->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&a)) && a &&
+            SUCCEEDED(dst->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&b)) && b) {
+            D3D11_TEXTURE2D_DESC sa{}, da{};
+            a->GetDesc(&sa); b->GetDesc(&da);
+            if (sa.Width != da.Width || sa.Height != da.Height) {
+                RecordScaleCandidate(sa.Width, sa.Height, (int)sa.Format,
+                                     da.Width, da.Height, (int)da.Format, "CopyResource", nullptr);
+            }
+        }
+        if (a) a->Release();
+        if (b) b->Release();
+    }
+    if (g_origCopyRes) g_origCopyRes(ctx, dst, src);
+}
+
+static void STDMETHODCALLTYPE Hook_CopySubresourceRegion(ID3D11DeviceContext* ctx, ID3D11Resource* dst, UINT dstSub,
+                                                         UINT dstX, UINT dstY, UINT dstZ,
+                                                         ID3D11Resource* src, UINT srcSub, const D3D11_BOX* box)
+{
+    if (g_probeScale && dst && src && box) {
+        ID3D11Texture2D* a = nullptr; ID3D11Texture2D* b = nullptr;
+        if (SUCCEEDED(src->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&a)) && a &&
+            SUCCEEDED(dst->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&b)) && b) {
+            D3D11_TEXTURE2D_DESC sa{}, da{};
+            a->GetDesc(&sa); b->GetDesc(&da);
+            const UINT sw = box->right - box->left, sh = box->bottom - box->top;
+            const UINT dw = da.Width - dstX, dh = da.Height - dstY;
+            if (sw && sh && (sw != dw || sh != dh)) {
+                RecordScaleCandidate(sw, sh, (int)sa.Format, dw, dh, (int)da.Format,
+                                     "CopySubresourceRegion", nullptr);
+            }
+        }
+        if (a) a->Release();
+        if (b) b->Release();
+    }
+    if (g_origCopySub) g_origCopySub(ctx, dst, dstSub, dstX, dstY, dstZ, src, srcSub, box);
+}
+
+static void STDMETHODCALLTYPE Hook_ResolveSubresource(ID3D11DeviceContext* ctx, ID3D11Resource* dst, UINT dstSub,
+                                                      ID3D11Resource* src, UINT srcSub, DXGI_FORMAT fmt)
+{
+    if (g_probeScale && dst && src) {
+        ID3D11Texture2D* a = nullptr; ID3D11Texture2D* b = nullptr;
+        if (SUCCEEDED(src->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&a)) && a &&
+            SUCCEEDED(dst->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&b)) && b) {
+            D3D11_TEXTURE2D_DESC sa{}, da{};
+            a->GetDesc(&sa); b->GetDesc(&da);
+            if (sa.Width != da.Width || sa.Height != da.Height) {
+                RecordScaleCandidate(sa.Width, sa.Height, (int)sa.Format,
+                                     da.Width, da.Height, (int)da.Format, "ResolveSubresource", nullptr);
+            }
+        }
+        if (a) a->Release();
+        if (b) b->Release();
+    }
+    if (g_origResolve) g_origResolve(ctx, dst, dstSub, src, srcSub, fmt);
 }
 
 // Called from every Draw* hook before the original call is forwarded.
@@ -562,66 +892,85 @@ static void ProbeUpscale(ID3D11DeviceContext* ctx, UINT vertexCount)
     }
     rtv->Release();
     if (!outW || !outH) return;
+    BumpSize(g_censusOut, &g_censusOutN, outW, outH);
 
-    // Input size: largest bound PS SRV. The upscale source is the scene colour.
-    ID3D11ShaderResourceView* srvs[8] = {};
-    ctx->PSGetShaderResources(0, 8, srvs);
+    // Sequence recording happens before any filtering, so same-size passes
+    // (tonemap, AA) are captured too -- ordering is the whole point.
+    uint32_t seqCrc = 0;
+    UINT seqPsLen = 0;
+    {
+        ID3D11PixelShader* sps = nullptr;
+        ctx->PSGetShader(&sps, nullptr, 0);
+        if (sps) { LookupPixelShader(sps, &seqPsLen, &seqCrc); sps->Release(); }
+    }
+
+    // Input size: scan the whole PS and VS texture range and take the largest
+    // one that is plausibly a scene image. The earlier scan of slots 0..7 plus
+    // "largest wins" produced false positives: a 1x1 lookup texture beat nothing
+    // and got reported as a 1x1 -> 1280x720 "upscale" 1.4M times.
+    //
+    // A real upscale source is the biggest texture on the unit that is still
+    // smaller than the target. Anything tinier than kMinSrcPixels is a LUT,
+    // dither noise or a histogram target, not a scene.
+    const UINT kMinSrcPixels = 4096;   // below this it is not a scene image
+
     UINT inW = 0, inH = 0;
     int fmtIn = 0;
-    for (int i = 0; i < 8; i++) {
-        if (!srvs[i]) continue;
-        ID3D11Resource* res = nullptr;
-        srvs[i]->GetResource(&res);
-        if (res) {
-            ID3D11Texture2D* tex = nullptr;
-            if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
-                D3D11_TEXTURE2D_DESC d{}; tex->GetDesc(&d);
-                if (d.Width * d.Height > inW * inH) { inW = d.Width; inH = d.Height; fmtIn = (int)d.Format; }
-                tex->Release();
+    UINT seenMaxW = 0, seenMaxH = 0;   // largest texture seen at all (diagnostic)
+    int  seenFmt = 0;                  // its format, so same-size passes report one
+
+    for (int pass = 0; pass < 2; pass++) {
+        ID3D11ShaderResourceView* srvs[128] = {};
+        const UINT n = 128;
+        if (pass == 0) ctx->PSGetShaderResources(0, n, srvs);
+        else           ctx->VSGetShaderResources(0, n, srvs);
+        for (UINT i = 0; i < n; i++) {
+            if (!srvs[i]) continue;
+            ID3D11Resource* res = nullptr;
+            srvs[i]->GetResource(&res);
+            if (res) {
+                ID3D11Texture2D* tex = nullptr;
+                if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
+                    D3D11_TEXTURE2D_DESC d{}; tex->GetDesc(&d);
+                    const UINT px = d.Width * d.Height;
+                    BumpSize(g_censusIn, &g_censusInN, d.Width, d.Height);
+                    if (px > seenMaxW * seenMaxH) { seenMaxW = d.Width; seenMaxH = d.Height; seenFmt = (int)d.Format; }
+                    if (px >= kMinSrcPixels && d.Width < outW && d.Height < outH) {
+                        if (px > inW * inH) { inW = d.Width; inH = d.Height; fmtIn = (int)d.Format; }
+                    }
+                    tex->Release();
+                }
+                res->Release();
             }
-            res->Release();
+            srvs[i]->Release();
         }
-        srvs[i]->Release();
     }
-    if (!inW || !inH) return;
+    if (!inW || !inH) {
+        // Nothing on the unit was both large enough and smaller than the target.
+        // Remember the biggest thing we did see, so the report can say whether a
+        // stretch happened here at all (biggest == out means a 1:1 pass).
+        RecordSeq(seqCrc, seenMaxW, seenMaxH, seenFmt, outW, outH, fmtOut, seqPsLen);
+        if (seenMaxW && seenMaxH && (seenMaxW < outW || seenMaxH < outH) && g_scaleUnknownLogs < 8) {
+            g_scaleUnknownLogs++;
+            Log("[GP] SCALE? no usable src for %ux%u (biggest bound %ux%u)\n",
+                outW, outH, seenMaxW, seenMaxH);
+        }
+        return;
+    }
+
+    // Record every fullscreen pass, including same-size ones (tonemap, AA):
+    // the ordering between tonemap and the stretch is what we need to know.
+    // For a same-size pass inW==outW, so the largest bound texture is used.
+    RecordSeq(seqCrc, inW ? inW : seenMaxW, inH ? inH : seenMaxH,
+              inW ? fmtIn : seenFmt, outW, outH, fmtOut, seqPsLen);
 
     // The signature we want: input strictly smaller than output.
     if (inW >= outW || inH >= outH) return;
 
-    g_scaleDraws++;
-    UINT psSize = 0; uint32_t psCrc = 0;
     ID3D11PixelShader* ps = nullptr;
     ctx->PSGetShader(&ps, nullptr, 0);
-    const bool known = LookupPixelShader(ps, &psSize, &psCrc);
+    RecordScaleCandidate(inW, inH, fmtIn, outW, outH, fmtOut, "Draw", ps);
     if (ps) ps->Release();
-
-    int slot = -1;
-    for (int k = 0; k < g_scaleSeenN; k++) {
-        if (g_scaleSeen[k].inW == inW && g_scaleSeen[k].inH == inH &&
-            g_scaleSeen[k].outW == outW && g_scaleSeen[k].outH == outH &&
-            g_scaleSeen[k].psCrc == psCrc) { slot = k; break; }
-    }
-    if (slot < 0 && g_scaleSeenN < 32) {
-        slot = g_scaleSeenN++;
-        g_scaleSeen[slot].inW = inW; g_scaleSeen[slot].inH = inH;
-        g_scaleSeen[slot].outW = outW; g_scaleSeen[slot].outH = outH;
-        g_scaleSeen[slot].psSize = psSize; g_scaleSeen[slot].psCrc = psCrc;
-        g_scaleSeen[slot].fmtIn = fmtIn; g_scaleSeen[slot].fmtOut = fmtOut;
-        g_scaleSeen[slot].hits = 0;
-        if (g_scaleLogs < 24) {
-            g_scaleLogs++;
-            Log("[GP] UPSCALE CANDIDATE %ux%u -> %ux%u fmt %d->%d psLen=%u psCrc=%08X known=%d\n",
-                inW, inH, outW, outH, fmtIn, fmtOut, psSize, psCrc, (int)known);
-            if (known) {
-                // GP_replace.txt format is: <size> <crc> <payload>
-                // <size> must equal the length the GAME passes to CreatePixelShader,
-                // which is exactly psLen in this report.
-                Log("[GP]   -> GP_replace.txt: %u %08X <payload.dxbc>   (psLen %u, crc %08X)\n",
-                    psSize, psCrc, psSize, psCrc);
-            }
-        }
-    }
-    if (slot >= 0) g_scaleSeen[slot].hits++;
 }
 
 static void WriteScaleReport()
@@ -630,20 +979,42 @@ static void WriteScaleReport()
     FILE* f = fopen((ExeDir() + "\\GP_upscale.txt").c_str(), "w");
     if (!f) return;
     fprintf(f, "# upscale probe report\n");
-    fprintf(f, "fullscreen_draws=%ld  upscale_candidates_hits=%ld  distinct=%d  psKnown=%d\n\n",
+    fprintf(f, "fullscreen_draws=%ld  upscale_candidates_hits=%ld  distinct=%d  psKnown=%d\n",
             g_scaleFullscreen, g_scaleDraws, g_scaleSeenN, g_psCount);
-    fprintf(f, "%-22s %-22s %-10s %-10s %s\n", "input(SRV)", "output(RTV)", "fmt in/out", "psLen", "psCrc");
+    fprintf(f, "backbuffer=%ux%u   renderW/H from Arma3.cfg: %u/%u\n",
+            g_bbW, g_bbH, g_cfgRenderW, g_cfgRenderH);
+
+    // The one question that decides everything: does the internal render size
+    // ever appear on a fullscreen draw? If not, the stretch is not a Draw.
+    if (g_cfgRenderW && g_cfgRenderH) {
+        bool asOut = false, asIn = false;
+        for (int k = 0; k < g_censusOutN; k++)
+            if (g_censusOut[k].w == g_cfgRenderW && g_censusOut[k].h == g_cfgRenderH) asOut = true;
+        for (int k = 0; k < g_censusInN; k++)
+            if (g_censusIn[k].w == g_cfgRenderW && g_censusIn[k].h == g_cfgRenderH) asIn = true;
+        fprintf(f, "internal render size %ux%u seen as: RTV=%s SRV=%s\n",
+                g_cfgRenderW, g_cfgRenderH, asOut ? "YES" : "NO", asIn ? "YES" : "NO");
+        if (!asIn && !asOut) {
+            fprintf(f, "  => the stretch from %ux%u to %ux%u is NOT done by a fullscreen Draw.\n"
+                       "     Look at the swapchain / DXGI scaling, or at a VS-only stretch.\n",
+                    g_cfgRenderW, g_cfgRenderH, g_bbW, g_bbH);
+        }
+    }
+    fprintf(f, "\n");
+    fprintf(f, "%-18s %-18s %-10s %-9s %-9s %s\n",
+            "input(SRV)", "output(RTV)", "fmt in/out", "psLen", "psCrc", "via");
     for (int k = 0; k < g_scaleSeenN; k++) {
         const ScaleSeen& s = g_scaleSeen[k];
         char a[24], b[24], c[24];
         snprintf(a, sizeof(a), "%ux%u", s.inW, s.inH);
         snprintf(b, sizeof(b), "%ux%u", s.outW, s.outH);
         snprintf(c, sizeof(c), "%d/%d", s.fmtIn, s.fmtOut);
-        fprintf(f, "%-22s %-22s %-10s %-10u %08X  hits=%ld\n", a, b, c, s.psSize, s.psCrc, s.hits);
-        if (!s.psSize) {
-            fprintf(f, "    ^ psLen=0 means this shader was not in the create table\n"
-                       "      (table full, or created before the proxy hooked).\n"
-                       "      The pass is still a real upscale candidate by geometry.\n");
+        fprintf(f, "%-18s %-18s %-10s %-9u %08X  %s  hits=%ld\n",
+                a, b, c, s.psSize, s.psCrc, s.via, s.hits);
+        if (!s.psSize && strcmp(s.via, "Draw") == 0) {
+            fprintf(f, "    ^ psLen=0: this shader was not in the create table.\n"
+                       "      The Draw path had no record of it; psKey=%016llX.\n",
+                       (unsigned long long)s.psKey);
         }
     }
     if (!g_scaleSeenN) {
@@ -652,6 +1023,17 @@ static void WriteScaleReport()
                    "(or renderWidth == backbuffer, i.e. Sampling is at 100%%).\n"
                    "Try again with Sampling set to 70%% in game options.\n");
     }
+
+    // Size census, unfiltered. If the internal render size never shows up on
+    // either side of a fullscreen draw, the stretch is not done by a Draw at all.
+    fprintf(f, "\n--- output (RTV) sizes seen on fullscreen draws ---\n");
+    for (int k = 0; k < g_censusOutN; k++)
+        fprintf(f, "  %-14ux%-6u draws=%ld\n", g_censusOut[k].w, g_censusOut[k].h, g_censusOut[k].n);
+    fprintf(f, "--- input (SRV) sizes seen on fullscreen draws ---\n");
+    fprintf(f, "  (all slots, PS and VS, unfiltered; tiny LUTs included)\n");
+    for (int k = 0; k < g_censusInN; k++)
+        fprintf(f, "  %-14ux%-6u binds=%ld\n", g_censusIn[k].w, g_censusIn[k].h, g_censusIn[k].n);
+
     fclose(f);
 }
 
@@ -675,18 +1057,26 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(ID3D11Device* self, cons
     uint32_t crc = Crc32(data, len);
     if (!g_ssao.empty() && LooksLikeSSAOFinal(data, len, crc)) {
         Log("[GP] SSAO FINAL REPLACED len=%zu crc=%08X\n", len, crc);
-        return g_origCPS(self, g_ssao.data(), g_ssao.size(), linkage, ppShader);
+        HRESULT hr0 = g_origCPS(self, g_ssao.data(), g_ssao.size(), linkage, ppShader);
+        // Record under the ORIGINAL crc: the pass is still the game's SSAO final,
+        // and the probe must recognise it in the frame sequence.
+        if (SUCCEEDED(hr0) && ppShader && *ppShader) NotePixelShader(*ppShader, g_ssao.data(), (UINT)g_ssao.size(), crc);
+        return hr0;
     }
     for (auto& r : g_repl) {
         if (r.size == len && r.crc == crc) {
             Log("[GP] REPLACE ps len=%zu crc=%08X\n", len, crc);
-            return g_origCPS(self, r.data.data(), r.data.size(), linkage, ppShader);
+            HRESULT hr1 = g_origCPS(self, r.data.data(), r.data.size(), linkage, ppShader);
+            // Same reasoning as above: keep the original crc so the replaced pass
+            // is still identifiable (e.g. tonemap in the pass sequence).
+            if (SUCCEEDED(hr1) && ppShader && *ppShader) NotePixelShader(*ppShader, r.data.data(), (UINT)r.data.size(), crc);
+            return hr1;
         }
     }
     HRESULT hr = g_origCPS(self, data, len, linkage, ppShader);
     // Remember (pointer -> size, crc) so the upscale probe can name the shader
     // it caught doing the stretch, ready to drop into GP_replace.txt.
-    if (SUCCEEDED(hr) && ppShader && *ppShader) NotePixelShader(*ppShader, (UINT)len, crc);
+    if (SUCCEEDED(hr) && ppShader && *ppShader) NotePixelShader(*ppShader, data, (UINT)len, crc);
     return hr;
 }
 
@@ -1347,6 +1737,7 @@ static PFN_Draw g_origDraw = nullptr;
 static PFN_DrawIndexedInst g_origDrawIndexedInst = nullptr;
 static PFN_DrawInst g_origDrawInst = nullptr;
 static long g_drawCalls = 0;
+static long g_repatchedTimes = 0;   // how often the engine reverted our draw slots
 
 static void DumpCB(ID3D11DeviceContext* ctx, int idx, ID3D11Buffer* buf)
 {
@@ -1373,7 +1764,83 @@ static void STDMETHODCALLTYPE Hook_VSSetCB(ID3D11DeviceContext* ctx, UINT start,
 {
     g_nVSCB++;
     for (UINT k = 0; k < n && start + k < 8; k++) g_vsCB[start + k] = bufs ? bufs[k] : nullptr;
+    // Re-patch on constant-buffer binds too: the engine restores the indexed-draw
+    // slots, and a per-frame fixup alone can miss an entire draw between frames.
+    // This hook runs before nearly every draw of the frame.
+    if (g_vtCtx && (g_nVSCB & 0x1F) == 0) ReassertPatches();
     if (g_origVSSetCB) g_origVSSetCB(ctx, start, n, bufs);
+}
+
+// ---- PSSetShader monitor (answers: is the replaced tonemap ever bound?) ----
+// The upscale probe cannot see passes that are not fullscreen quads, so a missing
+// 5860-byte pass in the sequence is not proof the replacement never runs. This
+// hook settles it directly: count how often the game binds the shader we meant
+// to replace, and how often it binds anything we did replace.
+typedef void (STDMETHODCALLTYPE *PFN_PSSetShader)(ID3D11DeviceContext*, ID3D11PixelShader*, ID3D11ClassInstance* const*, UINT);
+static PFN_PSSetShader g_origPSSetShader = nullptr;
+static long g_psBindTotal = 0;
+static long g_psBindTonemap = 0;     // binds of the shader we replace (42670B06)
+static long g_psBindSsao = 0;        // binds of the SSAO final we replace
+static long g_psBindOther = 0;
+
+// Shader-bind sequence: unlike the fullscreen probe this sees EVERY pixel shader
+// bind, so tonemap (which is not a 3-vertex quad) is not filtered out. Only
+// transitions are recorded, which collapses the long runs of UI draws.
+struct SeqEntry2 { uint32_t crc; UINT psLen; };
+static SeqEntry2 g_seq2[512];
+static int g_seq2Count = 0;
+static uint32_t g_seq2Last = 0;
+static int g_bindSeqFrame = 0;
+static bool g_bindSeqDone = false;
+
+static void RecordBind(uint32_t crc, UINT psLen)
+{
+    if (g_seq2Count >= 512) return;
+    if (crc == g_seq2Last && g_seq2Count) return;   // only transitions
+    g_seq2Last = crc;
+    SeqEntry2& e = g_seq2[g_seq2Count++];
+    e.crc = crc;
+    e.psLen = psLen;
+}
+
+static void DumpBindSeq()
+{
+    FILE* f = fopen((ExeDir() + "\\GP_bindseq.txt").c_str(), "w");
+    if (!f) return;
+    fprintf(f, "# PSSetShader bind sequence (transitions only), one frame\n");
+    fprintf(f, "# tonemap=42670B06  stretch=B682EAC0  ssao=850EE87F\n\n");
+    fprintf(f, "%-4s %-10s %s\n", "idx", "psCrc", "psLen");
+    int tm = -1, st = -1;
+    for (int k = 0; k < g_seq2Count; k++) {
+        fprintf(f, "%-4d %08X   %u\n", k, g_seq2[k].crc, g_seq2[k].psLen);
+        if (g_seq2[k].crc == 0x42670B06u && tm < 0) tm = k;
+        if (g_seq2[k].crc == 0xB682EAC0u && st < 0) st = k;
+    }
+    fclose(f);
+    Log("[GP] bind sequence: tonemap idx=%d stretch idx=%d (%d entries)\n", tm, st, g_seq2Count);
+    if (tm >= 0 && st >= 0) {
+        Log("[GP]   => tonemap binds %s the stretch; upscaler input would be %s\n",
+            tm < st ? "BEFORE" : "AFTER",
+            tm < st ? "LDR-tonemapped" : "HDR scene-linear");
+    }
+}
+
+static void STDMETHODCALLTYPE Hook_PSSetShader(ID3D11DeviceContext* ctx, ID3D11PixelShader* ps,
+                                               ID3D11ClassInstance* const* ci, UINT n)
+{
+    g_psBindTotal++;
+    if (ps) {
+        UINT len = 0; uint32_t crc = 0;
+        if (LookupPixelShader(ps, &len, &crc)) {
+            if (crc == 0x42670B06u) g_psBindTonemap++;
+            else if (crc == 0x850EE87Fu) g_psBindSsao++;
+            else g_psBindOther++;
+            RecordBind(crc, len);
+        } else {
+            g_psBindOther++;
+        }
+    }
+    if (g_origPSSetShader) g_origPSSetShader(ctx, ps, ci, n);
 }
 
 static void STDMETHODCALLTYPE Hook_IASetIB(ID3D11DeviceContext* ctx, ID3D11Buffer* buf, DXGI_FORMAT fmt, UINT off)
@@ -1388,6 +1855,11 @@ static void STDMETHODCALLTYPE Hook_IASetIB(ID3D11DeviceContext* ctx, ID3D11Buffe
         Log("[GP] IASetIndexBuffer #%ld ra=%p mod=%s\n", g_nIB, ra, mod);
     }
     g_ibBuf = buf; g_ibFmt = fmt;
+    // The engine keeps restoring slots 12/20 (DrawIndexed / DrawIndexedInstanced)
+    // but leaves 19 (this one) alone. Since every indexed draw is preceded by an
+    // index-buffer bind, re-patch the draw slots here: it closes the window where
+    // the engine's copy is live and we miss the draw entirely.
+    if (g_vtCtx && (g_nIB & 0x3F) == 0) ReassertPatches();
     if (g_origIASetIB) g_origIASetIB(ctx, buf, fmt, off);
 }
 
@@ -1497,15 +1969,16 @@ static void STDMETHODCALLTYPE Hook_DrawInd(ID3D11DeviceContext* ctx, ID3D11Buffe
 static int ReassertPatches()
 {
     if (!g_vtCtx) return 0;
-    static const int idxs[9] = { 12, 13, 19, 20, 21, 38, 39, 40, 58 };
-    static void* fns[9] = {};
-    fns[0] = (void*)Hook_DrawIndexed;   fns[1] = (void*)Hook_Draw;
-    fns[2] = (void*)Hook_IASetIB;       fns[3] = (void*)Hook_DrawIndexedInst;
-    fns[4] = (void*)Hook_DrawInst;      fns[5] = (void*)Hook_DrawAuto;
-    fns[6] = (void*)Hook_DrawIndexedInd; fns[7] = (void*)Hook_DrawInd;
-    fns[8] = (void*)Hook_ExecList;
+    static const int idxs[10] = { 9, 12, 13, 19, 20, 21, 38, 39, 40, 58 };
+    static void* fns[10] = {};
+    fns[0] = (void*)Hook_PSSetShader;
+    fns[1] = (void*)Hook_DrawIndexed;   fns[2] = (void*)Hook_Draw;
+    fns[3] = (void*)Hook_IASetIB;       fns[4] = (void*)Hook_DrawIndexedInst;
+    fns[5] = (void*)Hook_DrawInst;      fns[6] = (void*)Hook_DrawAuto;
+    fns[7] = (void*)Hook_DrawIndexedInd; fns[8] = (void*)Hook_DrawInd;
+    fns[9] = (void*)Hook_ExecList;
     int fixed = 0;
-    for (int k = 0; k < 9; k++) {
+    for (int k = 0; k < 10; k++) {
         if (g_vtCtx[idxs[k]] == fns[k]) continue;
         DWORD old = 0;
         if (VirtualProtect(&g_vtCtx[idxs[k]], sizeof(void*), PAGE_EXECUTE_READWRITE, &old)) {
@@ -1857,6 +2330,7 @@ static void ReloadPresentCfg()
     g_probeOn = GetFileAttributesA((ExeDir() + "\\GP_probe.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
     RefreshProbeMrtFlag();
     RefreshProbeScaleFlag();
+    LoadArmaCfgRenderSize();
 }
 
 static bool EnsureLumaStaging()
@@ -1991,10 +2465,44 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
     if ((++tick % 60) == 0) ReloadPresentCfg();
     g_mrtPresentSeq++;
     if (g_probeMrt) g_presentMode = 2;
+    CheckScaleDumpRequest();
+    // Capture the pass order of ONE settled frame (after load, before shutdown).
+    // g_seqCount is reset every frame so the dump reflects a single frame; the
+    // target frame is simply the first one that contains the stretch pass.
+    if (g_probeScale && !g_seqDone) {
+        g_seqFrame++;
+        if (g_seqFrame > 240) {
+            bool hasStretch = false;
+            for (int k = 0; k < g_seqCount; k++) if (g_seq[k].crc == kStretchCrc) { hasStretch = true; break; }
+            if (hasStretch) { DumpSeqOnce(); AnalyzeSeqOrder(); }
+        }
+        g_seqCount = 0;   // this frame is done either way
+    }
+    // Bind sequence: same idea but driven by PSSetShader, so passes that are not
+    // fullscreen quads (notably tonemap) are included.
+    if (g_probeScale && !g_bindSeqDone) {
+        g_bindSeqFrame++;
+        if (g_bindSeqFrame > 240 && g_seq2Count > 8) {
+            bool hasStretch = false, hasTonemap = false;
+            for (int k = 0; k < g_seq2Count; k++) {
+                if (g_seq2[k].crc == kStretchCrc) hasStretch = true;
+                if (g_seq2[k].crc == kTonemapCrc) hasTonemap = true;
+            }
+            if (hasStretch && hasTonemap) { DumpBindSeq(); g_bindSeqDone = true; }
+        }
+        g_seq2Count = 0;
+        g_seq2Last = 0;
+    }
     {
-        static int rp = 0;
+        // Count how often the engine really reverts our slots. Capping the log at
+        // 10 lines hid the fact that it may be happening every frame; the counter
+        // is reported in the periodic stats line instead.
         int fixed = ReassertPatches();
-        if (fixed && rp < 10) { rp++; Log("[GP] re-patched %d draw slots\n", fixed); }
+        if (fixed) {
+            g_repatchedTimes++;
+            static int rp = 0;
+            if (rp < 10) { rp++; Log("[GP] re-patched %d draw slots\n", fixed); }
+        }
     }
     if (g_drawOn && g_drawFile) {
         static int lastIdx = -1;
@@ -2021,8 +2529,11 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
         if ((++rc % 300) == 0) {
             Log("[GP] calls DI=%ld D=%ld DII=%ld Di=%ld AUTO=%ld IND=%ld INDi=%ld Exec=%ld IB=%ld VSCB=%ld ctx=%ld\n",
                 g_nDI, g_nD, g_nDII, g_nDi, g_nAuto, g_nInd, g_nInd2, g_nExec, g_nIB, g_nVSCB, g_nCtx);
-            Log("[GP] probe class quad=%ld geom=%ld imm=%ld def=%ld defCtx=%ld insert_ok=%d fail=%d\n",
-                g_nQuad, g_nGeom, g_nDrawImm, g_nDrawDef, g_nDeferredCtx, g_probeInsertOk, g_probeInsertFail);
+            Log("[GP] probe class quad=%ld geom=%ld imm=%ld def=%ld defCtx=%ld insert_ok=%d fail=%d repatched=%ld\n",
+                g_nQuad, g_nGeom, g_nDrawImm, g_nDrawDef, g_nDeferredCtx, g_probeInsertOk, g_probeInsertFail,
+                g_repatchedTimes);
+            Log("[GP] psset total=%ld tonemap=%ld ssao=%ld other=%ld   (tonemap bound => replacement is live)\n",
+                g_psBindTotal, g_psBindTonemap, g_psBindSsao, g_psBindOther);
             if (g_probeOn) {
                 FILE* pf = fopen((ExeDir() + "\\GP_probe_stats.txt").c_str(), "w");
                 if (pf) {
@@ -2207,9 +2718,14 @@ static void HookContext(ID3D11DeviceContext* ctx)
     PatchSlot(vt, 39, (void*)Hook_DrawIndexedInd, (void**)&g_origDrawIndexedInd);
     PatchSlot(vt, 40, (void*)Hook_DrawInd, (void**)&g_origDrawInd);
     PatchSlot(vt, 58, (void*)Hook_ExecList, (void**)&g_origExecList);
+    // vtable indices per d3d11.h: 46 CopySubresourceRegion, 47 CopyResource, 57 ResolveSubresource
+    PatchSlot(vt, 46, (void*)Hook_CopySubresourceRegion, (void**)&g_origCopySub);
+    PatchSlot(vt, 47, (void*)Hook_CopyResource, (void**)&g_origCopyRes);
+    PatchSlot(vt, 57, (void*)Hook_ResolveSubresource, (void**)&g_origResolve);
     g_nCtx++;
     PatchSlot(vt, 14, (void*)Hook_Map, (void**)&g_origMap);
     PatchSlot(vt, 15, (void*)Hook_Unmap, (void**)&g_origUnmap);
+    PatchSlot(vt, 9,  (void*)Hook_PSSetShader, (void**)&g_origPSSetShader);
     PatchSlot(vt, 33, (void*)Hook_OMSetRT, (void**)&g_origOMSetRT);
     {
         static bool once = false;
