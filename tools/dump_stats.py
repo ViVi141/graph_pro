@@ -1,5 +1,5 @@
 import numpy as np, struct
-p = r"D:\SteamLibrary\steamapps\common\Arma 3\GP_depth.raw"
+p = r"<ARMA3>\GP_depth.raw"
 W, H = 1920, 1080
 raw = np.fromfile(p, dtype=np.uint32).reshape(H, W)
 d = (raw & 0xFFFFFF).astype(np.float32) / 16777216.0

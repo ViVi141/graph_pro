@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image, ImageDraw
-D = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo"
+D = r"<REPO>\demo"
 A = Image.open(D + r"\ab-vanilla-baseline.png").convert("RGB")
 B = Image.open(D + r"\ab-injected-baseline.png").convert("RGB")
 a = np.asarray(A).astype(np.float32); b = np.asarray(B).astype(np.float32)

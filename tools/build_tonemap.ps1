@@ -7,12 +7,18 @@ param(
 # not on our payload, so payload size may change freely between builds.
 # presets\GP_replace.txt points at GP_tonemap_agx.dxbc by filename.
 #
-# Compiler flags are part of the contract, not a preference. All four shipped
-# payloads were built as ps_4_0 WITHOUT /O3; that reproduces the shipped bytes
-# exactly (GP_ssao.dxbc -> sha256 5A2370A56BA8, GP_tonemap.dxbc -> 8BD7FDE4571B).
+# Compiler flags are part of the contract, not a preference. The shipped
+# tonemap / SSAO payloads were built as ps_4_0 WITHOUT /O3; that reproduces the
+# shipped bytes exactly (GP_ssao.dxbc -> sha256 5A2370A56BA8, GP_tonemap.dxbc ->
+# 8BD7FDE4571B; GP_tonemap_agx.dxbc changes whenever the look is edited, so it is
+# not an anchor -- its current hash is printed by every build).
 # Building SSAO as ps_5_0 silently changes the sample instruction
 # (sample_indexable, r0.x only) and therefore the AO output, so do not
 # "modernise" the target profile casually.
+#
+# Five payloads are shipped (tonemap AgX, AgX-neutral, ACES, SSAO resolve, FSR1).
+# tonemap_agx_neutral.hlsl does not exist in the repo -- that payload is shipped
+# as a binary only, so the job below skips it; that skip is expected.
 $ErrorActionPreference = 'Stop'
 
 if (-not $Fxc) {

@@ -3,7 +3,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np, os, json
 
-d = r"C:\Users\74738\Documents\Arma 3\Screenshots"
+d = r"<ARMA3_DOCS>\Screenshots"
 items = [("gp_q_baseline.png","baseline 原样"),
          ("gp_q_film_lowContrast.png","film_lowContrast 低对比"),
          ("gp_q_cold_highContrast.png","cold_highContrast 冷调高对比"),
@@ -28,6 +28,6 @@ for i,(fn,label) in enumerate(items):
     dr.text((x+2,y+6), label, font=font, fill=(240,240,242))
     dr.text((x+2,y+34), txt, font=small, fill=(150,190,230))
 
-out = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\grade-compare.png"
+out = r"<REPO>\demo\grade-compare.png"
 sheet.save(out)
 print(out, sheet.size)

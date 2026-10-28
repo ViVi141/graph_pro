@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image
-p = r"D:\SteamLibrary\steamapps\common\Arma 3\GP_depth.raw"
-OUT = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo"
+p = r"<ARMA3>\GP_depth.raw"
+OUT = r"<REPO>\demo"
 W, H = 1920, 1080
 raw = np.fromfile(p, dtype=np.uint32).reshape(H, W)
 d = (raw & 0xFFFFFF).astype(np.float32) / 16777216.0

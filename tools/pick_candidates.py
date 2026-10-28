@@ -1,7 +1,7 @@
 import struct, collections, json
 from capstone import *
 from capstone.x86 import *
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 data = open(EXE, "rb").read()
 e = struct.unpack_from("<I", data, 0x3C)[0]; coff = e + 4
 nsec = struct.unpack_from("<H", data, coff + 2)[0]; opt = coff + 20
@@ -65,5 +65,5 @@ cands.sort(key=lambda c: -c["simd"])
 print("\n%-12s %6s %5s %5s %5s" % ("rva", "size", "copy", "calls", "simd"))
 for c in cands[:15]:
     print("0x%08X %6d %5d %5d %5d" % (c["rva"], c["size"], c["copy_len"], c["calls"], c["simd"]))
-json.dump(cands, open(r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\candidates.json","w"), indent=1)
+json.dump(cands, open(r"<REPO>\extract\candidates.json","w"), indent=1)
 print("\nwrote extract/candidates.json")

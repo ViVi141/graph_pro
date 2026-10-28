@@ -1,5 +1,5 @@
 import pefile, os
-g = r"D:\SteamLibrary\steamapps\common\Arma 3"
+g = r"<ARMA3>"
 for name in ("arma3server_x64.exe", "arma3_x64.exe"):
     p = os.path.join(g, name)
     if not os.path.exists(p):

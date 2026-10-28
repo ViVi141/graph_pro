@@ -15,7 +15,7 @@
 | 材质 | PBR：粗糙度/金属度/法线贴图 | 有限 BRDF，rvmat 参数 | 补了电介质镜面 F0 |
 | 抗锯齿 | TAA/TSR + 超分 | FXAA/SMAA/MSAA | SMAA + MSAA 8x |
 | 大气 | 体积云、体积雾、光轴 | 简单雾 + 云层纹理 | 未改 |
-| 色调映射 | ACES / AgX，统一色彩管理 | 自有 filmic 曲线 | 替换为 ACES |
+| 色调映射 | ACES / AgX，统一色彩管理 | 自有 filmic 曲线 | 替换为 **AgX**（ACES 为备选；本表 2026-10-22 版写作 ACES） |
 | 动态范围 | HDR 输出 + 眼睛适应 | SDR + 眼睛适应 | 曲线校准，仍受适应影响 |
 | 植被 | 几何体 + 风场 + 半透明 | alpha 面片 | 未改 |
 | 贴图 | 4K + 虚拟纹理 | PAA，受 textureQuality 限制 | 拉满 |

@@ -1,12 +1,12 @@
 param([int]$N = 160, [int]$Sec = 15)
 $ErrorActionPreference = 'Stop'
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+. (Join-Path $PSScriptRoot '_paths.ps1')
 $exe = Join-Path $game 'arma3server_x64.exe'
 $prof = Join-Path $env:LOCALAPPDATA 'GP_arma_server'
-$cfg = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\server.cfg'
-$basic = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\basic.cfg'
+$cfg = (Join-Path $repo 'server\server.cfg')
+$basic = (Join-Path $repo 'server\basic.cfg')
 $m = Join-Path $game 'MPMissions\GP_ServerTest.Altis'
-$bak = 'C:\Users\74738\gp_re\initServer_measure_backup.sqf'
+$bak = (Join-Path $work 'initServer_measure_backup.sqf')
 $tpl = @'
 enableSaving [false, false];
 setDate [2035, 7, 12, 12, 0];
@@ -48,8 +48,8 @@ diag_log format ["[GP] spawn done units=%1 groups=%2", count allUnits, _nGroups]
 Copy-Item (Join-Path $m 'initServer.sqf') $bak -Force
 try {
   Set-Content -Path (Join-Path $m 'initServer.sqf') -Value ($tpl.Replace('__N__', [string]$N)) -Encoding UTF8
-  Copy-Item 'C:\Users\74738\gp_re\gpmeasure.dll' $game -Force
-  Copy-Item 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\injector.exe' $game -Force
+  Copy-Item (Join-Path $work 'gpmeasure.dll') $game -Force
+  Copy-Item (Join-Path $repo 'inject\counter\injector.exe') $game -Force
   Set-Content (Join-Path $game 'GP_measure.cfg') -Encoding Ascii -Value @('rva=646FC0','back=646FC5','bytes=48895C2410')
   Remove-Item (Join-Path $game 'GP_measure.log') -Force -EA SilentlyContinue
   Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force

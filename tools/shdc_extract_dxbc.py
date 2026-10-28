@@ -1,8 +1,8 @@
 
 import re, struct, os
-d = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shdc"
+d = r"<REPO>\extract\shdc"
 b = open(os.path.join(d,"Shaders_5_0_PP.shdc"),'rb').read()
-out = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\dxbc"
+out = r"<REPO>\extract\dxbc"
 os.makedirs(out, exist_ok=True)
 targets = ["PSPostProcessGlowNewFinalFilmic","PSPostProcessGlowNewFinalReinhard","PSPostProcessSSAOFinal"]
 for t in targets:

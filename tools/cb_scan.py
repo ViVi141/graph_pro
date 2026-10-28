@@ -1,5 +1,5 @@
 import numpy as np, glob, os
-g = r"D:\SteamLibrary\steamapps\common\Arma 3"
+g = r"<ARMA3>"
 files = sorted(glob.glob(os.path.join(g, "GP_cb_*_vs0.raw")))
 print("files:", len(files))
 def find_matrices(v):

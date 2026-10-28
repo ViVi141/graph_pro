@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-DEMO = Path(r"c:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo")
+DEMO = Path(r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo")
 INJ = DEMO / "yaab-sync-inject.mp4"
 VAN = DEMO / "yaab-sync-vanilla.mp4"
 N_FRAMES = 36  # evenly spaced; low-diff / UI frames dropped for fit

@@ -12,9 +12,9 @@ import cv2
 import imageio_ffmpeg
 import numpy as np
 
-DEMO = Path(r"c:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo")
-INJ_SRC = Path(r"C:\Users\74738\Videos\2026-10-23 23-41-19.mp4")
-VAN_SRC = Path(r"C:\Users\74738\Videos\2026-10-23 23-45-17.mp4")
+DEMO = Path(r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo")
+INJ_SRC = Path(r"<USERPROFILE>\Videos\2026-10-23 23-41-19.mp4")
+VAN_SRC = Path(r"<USERPROFILE>\Videos\2026-10-23 23-45-17.mp4")
 DELTA = 262  # vanilla_frame = inject_frame + DELTA
 BR, CO, SA, GA = 0.006364, 0.984077, 1.014909, 1.349000
 

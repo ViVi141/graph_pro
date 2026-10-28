@@ -1,7 +1,7 @@
 # Inject gpsample.dll into a running Arma3_x64 process.
 # ASCII-only messages: PS 5.1 defaults to system codepage without BOM.
 param(
-  [string]$Game = 'D:\SteamLibrary\steamapps\common\Arma 3',
+  [string]$Game = $env:ARMA3_DIR,
   [string]$Process = 'Arma3_x64.exe'
 )
 $ErrorActionPreference = 'Stop'

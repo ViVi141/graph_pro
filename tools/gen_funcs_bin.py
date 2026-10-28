@@ -1,6 +1,6 @@
 import struct, os, sys
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3server_x64.exe"
-OUT = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\funcs.bin"
+EXE = r"<ARMA3>\arma3server_x64.exe"
+OUT = r"<REPO>\inject\counter\funcs.bin"
 data = open(EXE, "rb").read()
 e = struct.unpack_from("<I", data, 0x3C)[0]; coff = e + 4
 nsec = struct.unpack_from("<H", data, coff + 2)[0]; opt = coff + 20

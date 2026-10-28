@@ -1,4 +1,4 @@
-param(
+﻿param(
     [int]$SampleMinutes = 3,
     [int]$AttachDelaySec = 25,
     [switch]$SkipBuild,
@@ -9,7 +9,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path $PSScriptRoot -Parent
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+$game = $env:ARMA3_DIR
+if (-not $game) { throw 'Set ARMA3_DIR to the Arma 3 install directory.' }
 $serverExe = Join-Path $game 'arma3server_x64.exe'
 $counter = Join-Path $repo 'inject\counter'
 $missionSrc = Join-Path $repo 'mission\GP_ServerTest.Altis'
@@ -54,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $counter 'deploy_
 if ($LASTEXITCODE -ne 0) { throw 'deploy_sample failed' }
 
 # --- stop old server/client ---
-Get-Process arma3server_x64, arma3_x64 -EA SilentlyContinue | ForEach-Object {
+Get-Process arma3server_x64 -EA SilentlyContinue | ForEach-Object {
     Write-Host "Stopping $($_.Name) pid=$($_.Id)" -ForegroundColor Yellow
     $_ | Stop-Process -Force
 }

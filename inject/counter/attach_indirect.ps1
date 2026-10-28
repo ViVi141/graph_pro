@@ -1,5 +1,5 @@
 param(
-  [string]$Game = 'D:\SteamLibrary\steamapps\common\Arma 3',
+  [string]$Game = $env:ARMA3_DIR,
   [string]$Process = 'Arma3_x64.exe'
 )
 $ErrorActionPreference = 'Stop'

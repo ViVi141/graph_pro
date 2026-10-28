@@ -10,7 +10,7 @@ import struct
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 from capstone.x86 import X86_OP_MEM, X86_REG_RIP
 
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_TXT = os.path.join(ROOT, "extract", "cpu_samples", "simstep_0x1155340.txt")
 OUT_MD_SECTION = os.path.join(ROOT, "extract", "cpu_samples", "simstep_summary.md")

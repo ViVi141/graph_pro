@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from contact_shadow_smoke import contact_shadow, make_scene
+from contact_shadow_smoke import contact_occlusion, make_scene
 
 ROOT = Path(__file__).resolve().parents[1]
 DEMO = ROOT / "demo"
@@ -31,7 +31,9 @@ def panel_row(*imgs: np.ndarray, labels: list[str]) -> Image.Image:
 
 def main() -> None:
     col, d, _ = make_scene()
-    sh = contact_shadow(d, light_xy=(0.35, -0.75), radius_m=1.20, proj_k=600.0, steps=8)
+    # contact_occlusion() returns occlusion; the panels below work with "lit" = 1 - occ.
+    occ = contact_occlusion(d, light_xy=(0.35, -0.75), radius_m=1.20, proj_k=600.0, steps=8)
+    sh = 1.0 - occ
     strength = 0.45
     comp = col * (1.0 - (1.0 - sh[..., None]) * strength)
     o = 1.0 - sh

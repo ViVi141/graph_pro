@@ -1,14 +1,14 @@
 param([string]$GroupList = '96,144,192', [int]$SettleSec = 12, [int]$SampleSec = 10)
 $Groups = $GroupList.Split(',') | ForEach-Object { [int]$_.Trim() }
 $ErrorActionPreference = 'Stop'
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+. (Join-Path $PSScriptRoot '_paths.ps1')
 $exe = Join-Path $game 'arma3server_x64.exe'
 $prof = Join-Path $env:LOCALAPPDATA 'GP_arma_server'
-$cfg = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\server.cfg'
-$basic = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\basic.cfg'
+$cfg = (Join-Path $repo 'server\server.cfg')
+$basic = (Join-Path $repo 'server\basic.cfg')
 $m = Join-Path $game 'MPMissions\GP_ServerTest.Altis'
-$bak = 'C:\Users\74738\gp_re\initServer_saturate_backup.sqf'
-$outDir = 'C:\Users\74738\gp_re'
+$bak = (Join-Path $work 'initServer_saturate_backup.sqf')
+$outDir = $work
 
 Add-Type -TypeDefinition @"
 using System;

@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pe, xrefs
 
-SRV = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3server_x64.exe"
+SRV = r"<ARMA3>\arma3server_x64.exe"
 b = pe.Bin(SRV)
 print("funcs", len(b.funcs), "base", hex(b.base))
 ss = b.strings(8, 160)

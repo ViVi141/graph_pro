@@ -1,0 +1,21 @@
+r fmt=10 1920x1080 samples=8 bind=40 present=3
+d fmt=44 1920x1080 samples=8 bind=72 present=3
+r fmt=10 1920x1080 samples=1 bind=168 present=3
+r fmt=28 1920x1080 samples=1 bind=40 present=3
+r fmt=41 1920x1080 samples=1 bind=40 present=22
+d fmt=45 1920x1080 samples=1 bind=64 present=22
+r fmt=61 1920x1080 samples=1 bind=40 present=22
+s fmt=41 1920x1080 samples=1 bind=40 present=22
+r fmt=34 1920x1080 samples=1 bind=40 present=22
+s fmt=28 1920x1080 samples=1 bind=40 present=22
+r fmt=28 1920x1080 samples=1 bind=168 present=22
+s fmt=34 1920x1080 samples=1 bind=40 present=22
+d fmt=44 1920x1080 samples=1 bind=72 present=22
+s fmt=44 1920x1080 samples=1 bind=72 present=22
+s fmt=10 1920x1080 samples=1 bind=168 present=22
+dump GP_mrt_28_1920x1080.raw fmt=28 bpp=4
+dump GP_mrt_41_1920x1080.raw fmt=41 bpp=4
+dump GP_mrt_61_1920x1080.raw fmt=61 bpp=1
+dump GP_mrt_34_1920x1080.raw fmt=34 bpp=4
+dump GP_mrt_28_1920x1080.raw fmt=28 bpp=4
+dump GP_mrt_10_1920x1080.raw fmt=10 bpp=8

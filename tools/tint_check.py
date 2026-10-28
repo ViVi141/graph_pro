@@ -2,9 +2,9 @@
 from PIL import Image
 import numpy as np
 shots = {
- "原值": r"C:\Users\74738\.dsh\attachments\v1\objects\6a\6a7fb4f0b30eefca60dc4dfb2f0047bda42194a78b36d82c0fb5ed18ecca1683",
- "0.6 无冷色": r"C:\Users\74738\.dsh\attachments\v1\objects\9c\9cda81ac89d36daa4f2ef9d15aef2310eaa8b24367a6c2e980dcf7a7e34b1edd",
- "0.6 + 冷色": r"C:\Users\74738\.dsh\attachments\v1\objects\cc\cc06f1f421cb62a788c817d77990ea78e22c0da4b0bdeabe322937fd48d59395",
+ "原值": r"<USERPROFILE>\.dsh\attachments\v1\objects\6a\6a7fb4f0b30eefca60dc4dfb2f0047bda42194a78b36d82c0fb5ed18ecca1683",
+ "0.6 无冷色": r"<USERPROFILE>\.dsh\attachments\v1\objects\9c\9cda81ac89d36daa4f2ef9d15aef2310eaa8b24367a6c2e980dcf7a7e34b1edd",
+ "0.6 + 冷色": r"<USERPROFILE>\.dsh\attachments\v1\objects\cc\cc06f1f421cb62a788c817d77990ea78e22c0da4b0bdeabe322937fd48d59395",
 }
 def stat(p, box):
     a = np.asarray(Image.open(p).convert("RGB")).astype(np.float32)/255

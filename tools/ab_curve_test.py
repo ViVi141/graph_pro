@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image
 from numpy.lib.stride_tricks import sliding_window_view
-D = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo"
+D = r"<REPO>\demo"
 a = np.asarray(Image.open(D + r"\ab-vanilla-baseline.png").convert("RGB")).astype(np.float32)
 b = np.asarray(Image.open(D + r"\ab-injected-baseline.png").convert("RGB")).astype(np.float32)
 

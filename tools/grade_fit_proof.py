@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-DEMO = Path(r"c:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo")
+DEMO = Path(r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo")
 VANILLA = DEMO / "_live" / "vanilla-maxcfg-latest" / "gp_r_baseline.png"
 INJECT = DEMO / "_live" / "with-dll-maxcfg-20261023-223515" / "gp_r_baseline.png"
 

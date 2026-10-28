@@ -5,7 +5,7 @@ import bisect
 import struct
 from capstone import CS_ARCH_X86, CS_MODE_64, Cs
 
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3server_x64.exe"
+EXE = r"<ARMA3>\arma3server_x64.exe"
 TARGETS = [0x0140D288, 0x011DCE70, 0x01088D30, 0x00E32A82, 0x011C8D00]
 
 data = open(EXE, "rb").read()

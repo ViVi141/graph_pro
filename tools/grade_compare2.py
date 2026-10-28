@@ -3,7 +3,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np, os
 
-d = r"C:\Users\74738\Documents\Arma 3\Screenshots"
+d = r"<ARMA3_DOCS>\Screenshots"
 items = [("gp_r_baseline.png","A 原样（引擎默认成像）"),
          ("gp_r_film_lowContrast.png","B 低对比胶片"),
          ("gp_r_cold_highContrast.png","C 冷调高对比"),
@@ -28,7 +28,7 @@ for i,(fn,label) in enumerate(items):
     dr.text((x+2,y+8), label, font=font, fill=(240,240,242))
     dr.text((x+2,y+36), "亮度 %.0f   高光溢出 %.1f%%   死黑 %.1f%%   饱和度 %.1f%%   对比σ %.0f" % rows[-1][1:], font=small, fill=(150,190,230))
 
-out = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\grade-compare-real.png"
+out = r"<REPO>\demo\grade-compare-real.png"
 sheet.save(out)
 for r_ in rows: print("%-22s luma=%.0f clip=%.1f%% crush=%.1f%% sat=%.1f%% sd=%.0f" % r_)
 print(out)

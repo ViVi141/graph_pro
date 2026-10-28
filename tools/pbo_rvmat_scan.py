@@ -1,5 +1,5 @@
 import struct, os
-ADDONS = r"D:\SteamLibrary\steamapps\common\Arma 3\addons"
+ADDONS = r"<ARMA3>\addons"
 READ = 2 * 1024 * 1024
 rows = []
 for fn in sorted(os.listdir(ADDONS)):

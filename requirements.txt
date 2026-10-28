@@ -1,0 +1,15 @@
+# Python dependencies for the offline tools in tools/ (analysis + A/B + demos).
+#
+# Pinned to the versions the repo was last exercised with on 2026-10-28
+# (Python 3.14.6). Nothing in tools/ is imported by the game; this only covers
+# the offline pipeline (image/AO analysis, PE & shdc reverse engineering, A/B
+# report generation).
+#
+#   python -m pip install -r requirements.txt
+
+numpy==2.5.3
+Pillow==12.3.0
+capstone==5.0.9
+pefile==2024.8.26
+opencv-python==5.0.0.93
+imageio-ffmpeg==0.6.0

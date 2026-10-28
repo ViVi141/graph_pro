@@ -1,6 +1,6 @@
 
 import re
-p = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3_x64.exe"
+p = r"<ARMA3>\arma3_x64.exe"
 d = open(p,'rb').read()
 print("size", len(d))
 for k in [b"DXBC", b"Microsoft (R) HLSL Shader Compiler", b"d3dcompiler", b"D3DCompile", b"shader model", b"\\ShaderSources_4_0"]:

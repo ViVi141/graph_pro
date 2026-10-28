@@ -1,7 +1,7 @@
 
 import re, struct, zlib, os, glob
 
-shdc_dir = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shdc"
+shdc_dir = r"<REPO>\extract\shdc"
 name_pat = re.compile(rb'([A-Za-z][A-Za-z0-9_]{2,40})\x00((?:ps|vs|gs|cs)_[45]_[01])\x00([0-9A-F]{8})\x00')
 
 table = {}
@@ -21,7 +21,7 @@ for fn in glob.glob(os.path.join(shdc_dir, "*.shdc")):
 
 print("ps entries in table:", len(table))
 
-log = open(r"D:\SteamLibrary\steamapps\common\Arma 3\GP_shader.log", encoding='utf-8', errors='replace').read().splitlines()
+log = open(r"<ARMA3>\GP_shader.log", encoding='utf-8', errors='replace').read().splitlines()
 seen = {}
 for line in log:
     m = re.search(r'ps size=(\d+) crc=([0-9A-F]{8})', line)

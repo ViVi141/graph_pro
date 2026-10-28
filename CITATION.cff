@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this work, cite the repository."
+title: "graph_pro: Arma 3 rendering and CPU research notes"
+abstract: >-
+  A research repository for Arma 3 (Real Virtuality 4, D3D11): a d3d11 proxy
+  that replaces post-process shaders by exact size/CRC fingerprints and injects
+  material constants, an offline A/B measurement pipeline, and a separate
+  CPU-attribution toolkit for headless servers and clients. The main output is
+  the evidence: which hooks work, which are structurally impossible, and which
+  optimisations turned out to be no-ops or regressions.
+authors:
+  - name: "ViVi141"
+    website: "https://github.com/ViVi141"
+version: "0.1.0"
+date-released: "2026-10-28"
+license: "MIT"
+repository-code: "https://github.com/ViVi141/graph_pro"
+keywords:
+  - "Arma 3"
+  - "D3D11"
+  - "reverse engineering"
+  - "rendering"
+  - "performance"

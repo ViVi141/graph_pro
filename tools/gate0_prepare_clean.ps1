@@ -1,6 +1,6 @@
-# 为 RenderDoc 干净抓帧临时移走 d3d11 代理
+﻿# 为 RenderDoc 干净抓帧临时移走 d3d11 代理
 param(
-  [string]$Game = 'D:\SteamLibrary\steamapps\common\Arma 3',
+  [string]$Game = '<ARMA3>',
   [switch]$Restore
 )
 $ErrorActionPreference = 'Stop'

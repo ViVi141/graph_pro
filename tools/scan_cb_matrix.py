@@ -42,7 +42,7 @@ def scan_file(path: Path) -> list[int]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("dir", type=Path, nargs="?", default=Path(r"D:\SteamLibrary\steamapps\common\Arma 3"))
+    ap.add_argument("dir", type=Path, nargs="?", default=Path(r"<ARMA3>"))
     args = ap.parse_args()
     files = sorted(args.dir.glob("GP_cb_*.raw"))
     if not files:

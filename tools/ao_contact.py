@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image
-GAME = r"D:\SteamLibrary\steamapps\common\Arma 3"
-OUT = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo"
+GAME = r"<ARMA3>"
+OUT = r"<REPO>\demo"
 W,H = 1920,1080
 d = (np.fromfile(GAME+r"\GP_depth_1200.raw",dtype=np.uint32).reshape(H,W)&0xFFFFFF).astype(np.float32)/16777216.0
 c = np.fromfile(GAME+r"\GP_color_1200.raw",dtype=np.uint8).reshape(H,W,4)[:,:,:3].astype(np.float32)/255.0

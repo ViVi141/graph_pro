@@ -1,7 +1,7 @@
 
 from PIL import Image
 import numpy as np
-p = r"C:\Users\74738\Documents\Arma 3\Screenshots\gp_r_baseline.png"
+p = r"<ARMA3_DOCS>\Screenshots\gp_r_baseline.png"
 a = np.asarray(Image.open(p).convert("RGB")).astype(np.float32)/255
 def stat(name, x0,y0,x1,y1):
     z = a[y0:y1, x0:x1]

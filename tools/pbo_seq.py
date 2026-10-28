@@ -1,5 +1,5 @@
 import struct, os
-ADDONS = r"D:\SteamLibrary\steamapps\common\Arma 3\addons"
+ADDONS = r"<ARMA3>\addons"
 p = os.path.join(ADDONS, "plants_f.pbo")
 with open(p, "rb") as f:
     head = f.read(4*1024*1024)

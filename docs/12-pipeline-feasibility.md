@@ -87,7 +87,7 @@ flowchart LR
 ### 矩阵
 
 ```
-python tools/scan_cb_matrix.py "D:\SteamLibrary\steamapps\common\Arma 3"
+python tools/scan_cb_matrix.py "<ARMA3>"
 → 0/40 GP_cb_*.raw 含仿射 4x4
 ```
 
@@ -131,10 +131,21 @@ Present CB `g_p2` 传入接触阴影着色器。
 python tools/contact_shadow_smoke.py
 → demo/contact-shadow-smoke.png
   面板：原色 | 遮挡灰度 | 红色 debug | 合成
-  mean_occlusion_ground ≈ 0.49（合成场景）
+  mean_occlusion_ground ≈ 0.49（合成场景）   ← 2026-10-28 复核：无法复现
 ```
 
+> ⚠️ **2026-10-28 复核更正**：用当前代码重跑同一函数，
+> `mean_occ_ground = 0.023`（`contact_occlusion(make_scene()[1])`，ground = `d < 0.88`），
+> 不是 0.49。合成场景的深度范围只有 0.28–0.75 m，1.2 m 半径在 `projK=600` 下被
+> 裁剪到 ≤48 px，只有方块边缘一圈会命中——0.023 才是这个场景的真实量级。
+> **Gate 4 的"算法接线 GO"仍然成立，但"遮挡率 0.49"这条证据不成立**，
+> 离线冒烟只能证明代码能跑通，不能证明效果强度。见 [21](21-project-review.md) §11。
+
 ### 引擎内（部署后）
+
+> ⛔ **本流程已失效（2026-10-24 起）。** 代理里 `kContactShelved = true`，任何 `mode != 2`
+> 都会被强制改回 2，`GP_present_contact.txt`（mode 4）和 `GP_present_on.txt`（mode 0）
+> 都不会生效。下面三步仅作为历史记录保留；要重开必须先改代码里的这个常量。
 
 1. `inject\deploy.ps1`
 2. 游戏目录：`copy GP_present_contact.txt GP_present.txt`（mode **4** = 红色遮挡可视化）

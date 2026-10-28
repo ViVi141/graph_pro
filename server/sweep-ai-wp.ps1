@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory)][int]$Groups,
     [ValidateSet('none', 'move1', 'cycle2', 'cycle4')]
     [string]$WpMode = 'cycle2',
@@ -9,7 +9,8 @@ param(
 # One cell of the AI×waypoint cost grid. Metric = gpsample exe_fn / exe%.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+$game = $env:ARMA3_DIR
+if (-not $game) { throw 'Set ARMA3_DIR to the Arma 3 install directory.' }
 $serverExe = Join-Path $game 'arma3server_x64.exe'
 $counter = Join-Path $repo 'inject\counter'
 $missionSrc = Join-Path $repo 'mission\GP_ServerTest.Altis'
@@ -121,7 +122,7 @@ diag_log format ["[GP] spawn done units=%1 groups=%2", count allUnits, _nGroups]
 };
 "@
 
-Get-Process arma3server_x64, arma3_x64 -EA SilentlyContinue | Stop-Process -Force
+Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3
 
 # Only rewrite initServer (description.ext stays locked if DS still shutting down).

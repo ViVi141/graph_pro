@@ -2,8 +2,8 @@
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np, os
 
-before = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\before3\gp_r_baseline.png"
-after  = r"C:\Users\74738\Documents\Arma 3\Screenshots\gp_r_baseline.png"
+before = r"<REPO>\demo\before3\gp_r_baseline.png"
+after  = r"<ARMA3_DOCS>\Screenshots\gp_r_baseline.png"
 
 def arr(p):
     return np.asarray(Image.open(p).convert("RGB")).astype(np.float32)
@@ -37,5 +37,5 @@ for i,(name,cx,cy,half) in enumerate(regions):
         x=20+j*(tw+20); y=10+i*(th+34)
         sheet.paste(c,(x,y+34))
         d.text((x+2,y+6), f"{name} {'旧设置' if j==0 else '新设置'}", font=font, fill=(235,235,240))
-out=r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\config-compare.png"
+out=r"<REPO>\demo\config-compare.png"
 sheet.save(out); print(out, sheet.size)

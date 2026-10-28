@@ -5,7 +5,7 @@ import bisect
 import re
 import struct
 
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3server_x64.exe"
+EXE = r"<ARMA3>\arma3server_x64.exe"
 data = open(EXE, "rb").read()
 e = struct.unpack_from("<I", data, 0x3C)[0]
 coff = e + 4

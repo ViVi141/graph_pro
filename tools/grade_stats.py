@@ -3,7 +3,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np, os, json
 
-d = r"C:\Users\74738\Documents\Arma 3\Screenshots"
+d = r"<ARMA3_DOCS>\Screenshots"
 names = [("gp_q_baseline.png","原样 baseline"),
          ("gp_q_film_lowContrast.png","低对比胶片 film_lowContrast"),
          ("gp_q_cold_highContrast.png","冷调高对比 cold_highContrast"),
@@ -25,4 +25,4 @@ for fn, label in names:
 
 for s in stats:
     print(f"{s['label']:34s} luma={s['luma']:6.1f} clip={s['clip']:5.2f}% crush={s['crush']:5.2f}% sat={s['sat']:5.1f}% sd={s['contrast']:5.1f}")
-json.dump(stats, open(r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\_live\stats.json","w"), ensure_ascii=False, indent=1)
+json.dump(stats, open(r"<REPO>\demo\_live\stats.json","w"), ensure_ascii=False, indent=1)

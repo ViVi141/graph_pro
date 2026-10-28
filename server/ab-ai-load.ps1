@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('high', 'low')]
     [string]$Load = 'high',
     [int]$Seconds = 45
@@ -6,7 +6,8 @@ param(
 # Headless A/B: same mission, different AI counts. Reports mean diag_fps from RPT [GP] tick.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+$game = $env:ARMA3_DIR
+if (-not $game) { throw 'Set ARMA3_DIR to the Arma 3 install directory.' }
 $serverExe = Join-Path $game 'arma3server_x64.exe'
 $missionSrc = Join-Path $repo 'mission\GP_ServerTest.Altis'
 $missionDst = Join-Path $game 'MPMissions\GP_ServerTest.Altis'
@@ -19,7 +20,7 @@ New-Item -ItemType Directory -Force -Path $prof | Out-Null
 # Strip graphics proxy
 Remove-Item (Join-Path $game 'd3d11.dll') -Force -EA SilentlyContinue
 
-Get-Process arma3server_x64, arma3_x64 -EA SilentlyContinue | Stop-Process -Force
+Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 
 # Patch nGroups into a temp initServer

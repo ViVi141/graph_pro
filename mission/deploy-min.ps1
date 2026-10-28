@@ -26,7 +26,7 @@ Write-Host "Next:" -ForegroundColor Cyan
 Write-Host "  1. Start Arma 3. No mods, no d3d11.dll."
 Write-Host "  2. Main menu -> PLAY -> SCENARIOS -> pick 'GP Min'."
 Write-Host "  3. After the scene appears wait ~15 s, then Esc -> Abort."
-Write-Host "  4. Tell me 'done'. I will read the RPT and screenshots."
+Write-Host "  4. Then inspect the RPT and screenshot paths below."
 Write-Host ""
 Write-Host "Output:" -ForegroundColor Cyan
 Write-Host "  log:    $env:USERPROFILE\Documents\Arma 3\arma3_x64_*.rpt  (search [GP] MAT)"

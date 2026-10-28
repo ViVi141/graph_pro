@@ -1,8 +1,8 @@
 
 from PIL import Image
 import numpy as np
-for tag,p in [("current(0.93/1.10)", r"C:\Users\74738\Documents\Arma 3\Screenshots\gp_r_baseline.png"),
-              ("ref maxed", r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\_live\maxed.png")]:
+for tag,p in [("current(0.93/1.10)", r"<ARMA3_DOCS>\Screenshots\gp_r_baseline.png"),
+              ("ref maxed", r"<REPO>\demo\_live\maxed.png")]:
     a = np.asarray(Image.open(p).convert("RGB")).astype(np.float32)/255
     l = 0.2126*a[...,0]+0.7152*a[...,1]+0.0722*a[...,2]
     rb = a[...,0]-a[...,2]

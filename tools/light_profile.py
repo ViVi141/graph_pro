@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-A = r"C:\Users\74738\.dsh\attachments\v1\objects\cf\cf05fe264a6ab3e8740603c5165f0f8c8194cd095bc64bea9ed2d338572c1220"
+A = r"<USERPROFILE>\.dsh\attachments\v1\objects\cf\cf05fe264a6ab3e8740603c5165f0f8c8194cd095bc64bea9ed2d338572c1220"
 im = np.asarray(Image.open(A).convert("RGB")).astype(np.float32)/255.0
 L = 0.2126*im[:,:,0]+0.7152*im[:,:,1]+0.0722*im[:,:,2]
 print("floor luminance vs row (row -> distance from camera increases upward)")

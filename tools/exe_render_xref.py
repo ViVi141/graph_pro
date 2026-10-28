@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-EXE = Path(r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe")
+EXE = Path(r"<ARMA3>\Arma3_x64.exe")
 OUT = ROOT / "extract" / "rdc_notes" / "exe_render_xref.txt"
 
 # Substrings inside demangled RTTI / lambda type names.

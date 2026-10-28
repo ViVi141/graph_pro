@@ -2,13 +2,13 @@ import os
 import sys, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pe, capstone
-SRV = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3server_x64.exe"
+SRV = r"<ARMA3>\arma3server_x64.exe"
 b = pe.Bin(SRV)
 md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 md.detail = True
 TEXT = b.sections[0][1]
 top = []
-for line in open(r"C:\Users\74738\gp_re\main_top_224.txt", encoding="utf-8", errors="replace"):
+for line in open(r"<GP_WORK>\main_top_224.txt", encoding="utf-8", errors="replace"):
     m = re.match(r"(\d+)\s+([\d.]+)\s+([\d.]+)\s+0x([0-9A-Fa-f]+)\s+(\d+)", line.strip())
     if m: top.append((int(m.group(1)), float(m.group(3)), int(m.group(4), 16), int(m.group(5))))
 

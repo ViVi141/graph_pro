@@ -1,12 +1,12 @@
 
 import re, os, struct
-d = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shdc"
+d = r"<REPO>\extract\shdc"
 b = open(os.path.join(d,"Shaders_5_0_PS.shdc"),'rb').read()
 pat = re.compile(rb'([A-Za-z][A-Za-z0-9_]{2,60})\x00(ps_4_0)\x00([0-9A-F]{8})\x00')
 names = [m.group(1).decode() for m in pat.finditer(b)]
 uniq = sorted(set(names))
 print("ALL:", ", ".join(n for n in uniq if n.startswith("PSNormalMap") or n.startswith("PSDetail") or n.startswith("PSSuper")))
-out = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\dxbc_mat"
+out = r"<REPO>\extract\dxbc_mat"
 os.makedirs(out, exist_ok=True)
 targets = ["PSNormalMapDetailMacroASSpecularMap","PSNormalMapMacroASSpecularMap"]
 for t in targets:

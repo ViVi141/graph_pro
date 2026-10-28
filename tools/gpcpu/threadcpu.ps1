@@ -1,10 +1,10 @@
 param([int]$WaitSec = 35, [int]$SampleSec = 10)
 $ErrorActionPreference = 'Stop'
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+. (Join-Path $PSScriptRoot '_paths.ps1')
 $exe = Join-Path $game 'arma3server_x64.exe'
 $prof = Join-Path $env:LOCALAPPDATA 'GP_arma_server'
-$cfg = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\server.cfg'
-$basic = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\basic.cfg'
+$cfg = (Join-Path $repo 'server\server.cfg')
+$basic = (Join-Path $repo 'server\basic.cfg')
 Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 $args = @('-port=2302', "-config=$cfg", "-cfg=$basic", "-profiles=$prof", '-world=empty', '-autoInit', '-name=GPTest', '-nosound')

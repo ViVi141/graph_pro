@@ -1,0 +1,32 @@
+* text=auto eol=lf
+
+# Windows scripts: keep CRLF in the working tree. PowerShell 5.1 is happier,
+# and the existing files are CRLF. BOM is preserved per file (git does not add it).
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Compiled payloads / data
+*.dxbc binary
+*.pbo binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.mp4 binary
+*.webm binary
+*.npy binary
+*.npz binary
+*.dll binary
+*.exe binary
+*.obj binary
+*.lib binary
+*.exp binary
+
+# Docs
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.cff text eol=lf
+*.yml text eol=lf

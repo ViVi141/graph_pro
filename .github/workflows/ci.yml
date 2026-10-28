@@ -1,0 +1,49 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  syntax:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python syntax (no imports executed)
+        shell: pwsh
+        run: |
+          python -m compileall -q tools
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: PowerShell syntax
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem -Recurse -Filter *.ps1 -File |
+            Where-Object { $_.FullName -notmatch '\\_local\\' } |
+            ForEach-Object {
+              $tokens = $null
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+              foreach ($e in @($errors)) {
+                Write-Host "::error file=$($_.FullName),line=$($e.Extent.StartLineNumber)::$($e.Message)"
+                $failed = $true
+              }
+            }
+          if ($failed) { exit 1 }
+
+      - name: No personal paths or email
+        shell: pwsh
+        run: |
+          $hits = @(git grep -n -I -E 'C:\\Users\\[A-Za-z0-9._-]+|[A-Za-z0-9._%+-]+@qq\.com' -- . 2>$null)
+          if ($hits.Count -gt 0) {
+            $hits
+            Write-Host "::error::personal data found in tracked files"
+            exit 1
+          }

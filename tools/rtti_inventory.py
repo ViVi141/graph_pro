@@ -1,5 +1,5 @@
 import re, collections, os, json
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 data = open(EXE, "rb").read()
 names = sorted(set(m.group(0).decode("latin-1") for m in
                    re.finditer(rb"\.\?A[VU][A-Za-z0-9_@?$<>.-]{3,200}@@", data)))
@@ -27,7 +27,7 @@ for k in keywords:
     hits = [n for n in names if k in n]
     print("  %-12s %4d" % (k, len(hits)))
 
-out = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\rtti_names.txt"
+out = r"<REPO>\extract\rtti_names.txt"
 os.makedirs(os.path.dirname(out), exist_ok=True)
 open(out, "w", encoding="utf-8").write("\n".join(names))
 print("\nfull list ->", out)

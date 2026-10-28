@@ -81,6 +81,14 @@ static int   g_lightAutoValid = 0;
 static float g_aeScale = 0.0f;
 static float g_tintR = 0.95f;
 static float g_tintB = 1.06f;
+// AgX tune (GP_agx.txt): E K S [shoulder]. Shipped defaults live in the shader;
+// this only overrides them while the file exists, so deleting it restores the
+// baked-in tune without a rebuild.
+static int   g_agxOn = 0;
+static float g_agxE = 0.55f;
+static float g_agxK = 1.40f;
+static float g_agxS = 1.20f;
+static float g_agxShoulder = 0.85f;
 
 struct Replacement { uint32_t size; uint32_t crc; std::vector<uint8_t> data; };
 static std::vector<Replacement> g_repl;
@@ -90,8 +98,12 @@ static ID3D11Device* g_dev = nullptr;
 static ID3D11DeviceContext* g_ctx = nullptr;
 
 // present pass
+// NOTE: we deliberately never keep an ID3D11Texture2D* for back buffer 0. DXGI
+// requires every reference to a swap-chain buffer to be gone before
+// ResizeBuffers; holding one makes an in-game resolution change fail with
+// DXGI_ERROR_INVALID_CALL. Only the RTV (released in Hook_ResizeBuffers) and the
+// cached description are kept.
 static ID3D11RenderTargetView* g_bbRTV = nullptr;
-static ID3D11Texture2D* g_bbTex = nullptr;
 static ID3D11VertexShader* g_vs = nullptr;
 static ID3D11PixelShader* g_ps = nullptr;
 static ID3D11PixelShader* g_psMS = nullptr;
@@ -106,6 +118,8 @@ static bool g_presentReady = false;
 static int g_presentCount = 0;
 static UINT g_bbW = 0;
 static UINT g_bbH = 0;
+static DXGI_FORMAT g_bbFmt = DXGI_FORMAT_UNKNOWN;
+static UINT g_bbSamples = 1;
 // Contact shadows SHELVED (2026-10-24): black sky in all scenes; keep code but force off.
 static const bool kContactShelved = true;
 static int g_presentMode = 2;      // 0 = contact, 1 = gray debug, 2 = off, 3 = +depth thumb, 4 = red debug
@@ -121,17 +135,12 @@ static float g_temporalAlpha = 0.35f;
 static float g_lumaProtect0 = 0.05f;
 static float g_lumaProtect1 = 0.18f;
 static float g_depthEps = 0.002f;
-// Temporal history ping-pong (RG16F: occ, depth)
-static ID3D11Texture2D* g_histTex[2] = {};
-static ID3D11RenderTargetView* g_histRTV[2] = {};
-static ID3D11ShaderResourceView* g_histSRV[2] = {};
-static int g_histWrite = 0;
-static int g_histValid = 0;
 static ID3D11Texture2D* g_lumaStaging = nullptr;
 static bool  g_probeOn = false;
 static bool  g_probeMrt = false;     // GP_probe_mrt.txt: RT/DS census + depth timeline
 static int   g_mrtPresentSeq = 0;
 static void  RefreshProbeMrtFlag();
+static void  RefreshProbeScaleFlag();
 static int   ReassertPatches();
 static long  g_nQuad = 0;            // count==3/4/6 draws (PP fullscreen)
 static long  g_nGeom = 0;            // other index/vertex counts
@@ -348,9 +357,31 @@ static void ParseExpoFile(FILE* ef)
     }
 }
 
-static void ParseCbDumpFile(FILE* df)
+// GP_amb.txt: ambScale aeScale [tintR tintB]
+// One parser for both the initial load and the in-flight reload: they used to
+// disagree (load accepted a single float and silently zeroed AE, reload needed
+// two), so the same file could behave differently before and after a reload.
+static void ParseAmbFile(FILE* af)
 {
-    int en = 0; unsigned mn = 512, mx = 4096; int every = 120, maxf = 64;
+    float a = g_ambScale, b = g_aeScale, tr = g_tintR, tb = g_tintB;
+    int got = fscanf(af, "%f %f %f %f", &a, &b, &tr, &tb);
+    if (got >= 2) { g_ambScale = a; g_aeScale = b; }
+    if (got >= 4) { g_tintR = tr; g_tintB = tb; }
+}
+
+// GP_agx.txt: E K S [shoulder]  — runtime AgX tune, hot-reloaded.
+static void ParseAgxFile(FILE* af)
+{
+    float e = g_agxE, k = g_agxK, s = g_agxS, sh = g_agxShoulder;
+    int got = fscanf(af, "%f %f %f %f", &e, &k, &s, &sh);
+    if (got < 3) return;
+    g_agxE = e; g_agxK = k; g_agxS = s;
+    if (got >= 4) g_agxShoulder = sh;
+    g_agxOn = 1;
+}
+
+static void ParseCbDumpFile(FILE* df)
+{    int en = 0; unsigned mn = 512, mx = 4096; int every = 120, maxf = 64;
     int got = fscanf(df, "%d %u %u %d %d", &en, &mn, &mx, &every, &maxf);
     if (got >= 1) g_cbDumpOn = en;
     if (got >= 2) g_cbDumpMin = mn;
@@ -428,8 +459,7 @@ static void LoadConfig()
     }
     {
         FILE* af = fopen((dir + "\\GP_amb.txt").c_str(), "r");
-        if (af) { float a = 0, b = 0, tr = 0.95f, tb = 1.06f; int got = fscanf(af, "%f %f %f %f", &a, &b, &tr, &tb);
-            if (got >= 1) { g_ambScale = a; g_aeScale = b; } if (got >= 4) { g_tintR = tr; g_tintB = tb; } fclose(af); }
+        if (af) { ParseAmbFile(af); fclose(af); }
         Log("[GP] ambient %.2f ae %.2f tint %.2f/%.2f\n", g_ambScale, g_aeScale, g_tintR, g_tintB);
     }
     {
@@ -454,6 +484,11 @@ static void LoadConfig()
     g_probeOn = GetFileAttributesA((dir + "\\GP_probe.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
     if (g_probeOn) Log("[GP] probe mode ON (GP_probe.txt)\n");
     RefreshProbeMrtFlag();
+    // Without this the upscale probe only came alive on the 60th Present (it was
+    // only refreshed in ReloadPresentCfg), so the first second of every session
+    // was invisible even though the file had been in place before launch.
+    RefreshProbeScaleFlag();
+    LoadArmaCfgRenderSize();
     {
         FILE* ef = fopen((dir + "\\GP_expo.txt").c_str(), "r");
         if (!ef) Log("[GP] expo cfg: absent\n");
@@ -476,6 +511,15 @@ static void LoadConfig()
         if (af) { ParseAdaptFile(af); fclose(af); }
         Log("[GP] adapt %d blownTarget %.3f topTarget %.3f rate %.2f\n",
             g_adaptOn, g_adaptBlownTarget, g_adaptTopTarget, g_adaptRate);
+    }
+    {
+        FILE* ax = fopen((dir + "\\GP_agx.txt").c_str(), "r");
+        if (ax) { ParseAgxFile(ax); fclose(ax); }
+        if (g_agxOn)
+            Log("[GP] agx tune E%.3f K%.3f S%.3f shoulder %.3f\n",
+                g_agxE, g_agxK, g_agxS, g_agxShoulder);
+        else
+            Log("[GP] agx tune: baked-in defaults\n");
     }
 }
 
@@ -510,12 +554,40 @@ static int g_psCount = 0;
 static int g_psCap = 0;
 static UINT g_psBytesTotal = 0;
 
+// The immediate context is single-threaded by contract, but Arma replays render
+// constant buffers on a worker thread (WorkerThread<RenderCBToPlay>), so Map /
+// Unmap and CreatePixelShader can run off the render thread. These two tables are
+// the only shared mutable state on that path; guard them.
+static SRWLOCK g_psLock = SRWLOCK_INIT;
+static SRWLOCK g_mapLock = SRWLOCK_INIT;
+
+// Shared-lock guard for the read-only shader-table lookups (probe paths).
+struct PsSharedGuard
+{
+    PsSharedGuard() { AcquireSRWLockShared(&g_psLock); }
+    ~PsSharedGuard() { ReleaseSRWLockShared(&g_psLock); }
+};
+
 // Open-addressing map keyed by shader pointer; an empty slot has ps == nullptr.
 static int PsHash(ID3D11PixelShader* ps, int cap)
 {
     uint64_t v = (uint64_t)(uintptr_t)ps;
     v ^= v >> 33; v *= 0xff51afd7ed558ccdULL; v ^= v >> 33;
     return (int)(v & (uint64_t)(cap - 1));
+}
+
+// Entries hold a reference so a recycled pointer cannot be mistaken for a known
+// shader. That makes the table a (bounded) cache of live objects, so it is reset
+// wholesale if a session somehow creates more shaders than this — only probe
+// naming degrades, nothing in the render path depends on it.
+static const int kPsMaxEntries = 8192;
+
+static void PsMapReset()
+{
+    for (int k = 0; k < g_psCap; k++)
+        if (g_psSizes[k].ps) g_psSizes[k].ps->Release();
+    delete[] g_psSizes;
+    g_psSizes = nullptr; g_psCap = 0; g_psCount = 0; g_psBytesTotal = 0;
 }
 
 static void PsMapGrow()
@@ -540,10 +612,15 @@ struct ScaleSeen {
     uint32_t psCrc;
     uint64_t psKey;      // shader identity (pointer); crc may be 0 when unknown
     int fmtIn, fmtOut;
+    int prio;            // 2 = touches the internal render size or the back buffer
     long hits;
     char via[32];        // which API produced this size change
 };
-static ScaleSeen g_scaleSeen[32];
+// 32 slots filled up with high-frequency UI/debug passes on the first run, and the
+// one pass we care about (once per frame) never got a slot. Grow the table and,
+// when it is full, evict the least interesting entry instead of the newest one.
+static const int kScaleSeenMax = 128;
+static ScaleSeen g_scaleSeen[kScaleSeenMax];
 static int g_scaleSeenN = 0;
 static int g_scaleLogs = 0;
 static long g_scaleDraws = 0;
@@ -573,36 +650,122 @@ static void WriteScaleReport();
 // Frame pass sequence: records the fullscreen passes of ONE frame in execution
 // order. This is what answers "does tonemap run before or after the stretch",
 // which decides whether an upscaler sees HDR or LDR input.
+//
+// The dumped frame also carries, per pass, a colour-space summary of whatever
+// texture that pass sampled (min/max/mean, share above 1.0). That is the
+// "capture everything in one launch" mode: one run of GP_probe_scale.txt yields
+// the whole post-process chain with sizes, formats, shader fingerprints and the
+// value range at every stage.
 static int g_seqFrame = 0;
 static int g_seqCount = 0;
 static bool g_seqDone = false;
-struct SeqEntry { uint32_t crc; UINT outW, outH; int fmtOut; UINT inW, inH; int fmtIn; UINT psLen; };
+static bool g_seqArmed = false;          // next qualifying frame is the capture
+static int  g_captureTry = 0;            // frames spent armed (bail-out counter)
+static int  g_seqStatsBudget = 0;        // readbacks left in this frame
+
+struct SeqStats
+{
+    bool have = false;
+    UINT w = 0, h = 0;
+    int fmt = 0;
+    float mn[3] = { 0, 0, 0 }, mx[3] = { 0, 0, 0 }, mean[3] = { 0, 0, 0 };
+    float over1 = 0.0f, over4 = 0.0f;
+    int n = 0;
+};
+
+struct SeqEntry
+{
+    uint32_t crc; UINT outW, outH; int fmtOut; UINT inW, inH; int fmtIn; UINT psLen;
+    SeqStats src;
+    ID3D11ShaderResourceView* srv;   // owned; read back after the frame completes
+};
 static SeqEntry g_seq[256];
 
-static void RecordSeq(uint32_t crc, UINT inW, UINT inH, int fmtIn, UINT outW, UINT outH, int fmtOut, UINT psLen)
+static bool ReadTexStats(ID3D11ShaderResourceView* srv, SeqStats* out, const std::string* dumpPath);
+
+// Drop the references held for the capture frame. Readbacks happen at Present
+// time, not inside a Draw hook: a Map in the middle of command recording forces
+// a flush mid-frame and, on at least one driver, read back as all zeros.
+static void ClearSeq()
 {
-    if (g_seqDone || g_seqCount >= 256) return;
+    for (int k = 0; k < g_seqCount; k++) {
+        if (g_seq[k].srv) { g_seq[k].srv->Release(); g_seq[k].srv = nullptr; }
+    }
+    g_seqCount = 0;
+}
+
+static SeqEntry* RecordSeq(uint32_t crc, UINT inW, UINT inH, int fmtIn, UINT outW, UINT outH, int fmtOut, UINT psLen)
+{
+    if (g_seqDone || g_seqCount >= 256) return nullptr;
     SeqEntry& e = g_seq[g_seqCount++];
     e.crc = crc; e.inW = inW; e.inH = inH; e.fmtIn = fmtIn;
     e.outW = outW; e.outH = outH; e.fmtOut = fmtOut; e.psLen = psLen;
+    e.srv = nullptr;
+    return &e;
 }
 
 static void DumpSeqOnce()
 {
     if (g_seqDone || !g_seqCount) return;
     g_seqDone = true;
+
+    // The frame is finished. Anything the in-draw read could not get (or got as
+    // all-zero) is retried here, now that the frame is complete.
+    for (int k = 0; k < g_seqCount; k++) {
+        SeqEntry& e = g_seq[k];
+        if (!e.srv) continue;
+        const bool empty = !e.src.have ||
+            (e.src.mx[0] == 0.0f && e.src.mx[1] == 0.0f && e.src.mx[2] == 0.0f);
+        if (empty) ReadTexStats(e.srv, &e.src, nullptr);
+        e.srv->Release();
+        e.srv = nullptr;
+    }
+
     FILE* f = fopen((ExeDir() + "\\GP_passseq.txt").c_str(), "w");
     if (!f) return;
-    fprintf(f, "# fullscreen pass sequence, one frame, execution order\n");
-    fprintf(f, "# crc is from CreatePixelShader; size in bytes\n\n");
-    fprintf(f, "%-4s %-10s %-7s %-18s %-18s %s\n", "idx", "psCrc", "psLen", "input(SRV)", "output(RTV)", "fmt in/out");
+    fprintf(f, "# Fullscreen pass sequence: one frame, execution order.\n");
+    fprintf(f, "# crc/psLen come from CreatePixelShader (psLen = bytes the game passed).\n");
+    fprintf(f, "# src = the texture this pass sampled; min/max/mean are measured on a\n");
+    fprintf(f, "# 256x144 grid, >1%% / >4%% are the share of samples above 1.0 / 4.0\n");
+    fprintf(f, "# (that is what tells HDR scene-linear from display-referred LDR).\n");
+    fprintf(f, "# capture: present=%d  backbuffer=%ux%u  render=%ux%u\n\n",
+            g_mrtPresentSeq, g_bbW, g_bbH, g_cfgRenderW, g_cfgRenderH);
+    fprintf(f, "%-4s %-10s %-7s %-14s %-14s %-7s %-14s %-5s %-13s %s\n",
+            "idx", "psCrc", "psLen", "input(SRV)", "output(RTV)", "fmt", "src", "sfmt", "min..max", "mean/>1%");
     for (int k = 0; k < g_seqCount; k++) {
         const SeqEntry& e = g_seq[k];
-        fprintf(f, "%-4d %08X   %-7u %-6ux%-10u %-6ux%-10u %d/%d\n",
-                k, e.crc, e.psLen, e.inW, e.inH, e.outW, e.outH, e.fmtIn, e.fmtOut);
+        char inS[24], outS[24], fmt[12];
+        snprintf(inS, sizeof(inS), "%ux%u", e.inW, e.inH);
+        snprintf(outS, sizeof(outS), "%ux%u", e.outW, e.outH);
+        snprintf(fmt, sizeof(fmt), "%d/%d", e.fmtIn, e.fmtOut);
+        char src[24] = "-";
+        char sfmt[8] = "-";
+        char range[32] = "-";
+        char tail[24] = "-";
+        if (e.src.have) {
+            snprintf(src, sizeof(src), "%ux%u", e.src.w, e.src.h);
+            snprintf(sfmt, sizeof(sfmt), "%d", e.src.fmt);
+            snprintf(range, sizeof(range), "%.3f..%.3f", e.src.mn[1], e.src.mx[1]);
+            snprintf(tail, sizeof(tail), "%.3f/%.1f%%", e.src.mean[1], e.src.over1);
+        }
+        fprintf(f, "%-4d %08X %-7u %-14s %-14s %-7s %-14s %-5s %-13s %s\n",
+                k, e.crc, e.psLen, inS, outS, fmt, src, sfmt, range, tail);
     }
     fclose(f);
     Log("[GP] pass sequence written (%d passes)\n", g_seqCount);
+
+    // Full shader table: every PS the game created, so a replacement table can be
+    // built offline without another session.
+    FILE* s = fopen((ExeDir() + "\\GP_shaders.txt").c_str(), "w");
+    if (s) {
+        AcquireSRWLockShared(&g_psLock);
+        fprintf(s, "# every pixel shader created by the game (crc len bytes)\n");
+        for (int k = 0; k < g_psCap; k++)
+            if (g_psSizes[k].ps) fprintf(s, "%08X %u %u\n", g_psSizes[k].crc, g_psSizes[k].size, (unsigned)g_psSizes[k].bytes.size());
+        ReleaseSRWLockShared(&g_psLock);
+        fclose(s);
+        Log("[GP] shader table written (%d entries)\n", g_psCount);
+    }
 }
 
 // The stretch pass we located: 852x480 -> 1280x720, HDR (fmt 10) to LDR (fmt 28).
@@ -652,12 +815,17 @@ static void NotePixelShader(ID3D11PixelShader* ps, const void* data, UINT size, 
     // the probe file existed were never recorded, and the probe then reported
     // psLen=0 for exactly the passes it cares about. An O(1) hash hit is cheap
     // enough to pay on every create.
+    AcquireSRWLockExclusive(&g_psLock);
+    if (g_psCount >= kPsMaxEntries) {
+        Log("[GP] shader table hit %d entries -> reset\n", g_psCount);
+        PsMapReset();
+    }
     if (!g_psCap) PsMapGrow();
     if ((g_psCount + 1) * 10 >= g_psCap * 7) PsMapGrow();   // load factor < 0.7
 
     int i = PsHash(ps, g_psCap);
     while (g_psSizes[i].ps) {
-        if (g_psSizes[i].ps == ps) return;   // already recorded
+        if (g_psSizes[i].ps == ps) { ReleaseSRWLockExclusive(&g_psLock); return; }   // already recorded
         i = (i + 1) & (g_psCap - 1);
     }
     // Hold a reference: without it the pointer can be recycled by another
@@ -675,28 +843,36 @@ static void NotePixelShader(ID3D11PixelShader* ps, const void* data, UINT size, 
         g_psBytesTotal += size;
     }
     g_psCount++;
+    ReleaseSRWLockExclusive(&g_psLock);
 }
 
 static bool LookupPixelShader(ID3D11PixelShader* ps, UINT* size, uint32_t* crc)
 {
-    if (!ps || !g_psCap) return false;
+    if (!ps) return false;
+    AcquireSRWLockShared(&g_psLock);
+    if (!g_psCap) { ReleaseSRWLockShared(&g_psLock); return false; }
+    bool found = false;
     int i = PsHash(ps, g_psCap);
     while (g_psSizes[i].ps) {
         if (g_psSizes[i].ps == ps) {
             if (size) *size = g_psSizes[i].size;
             if (crc) *crc = g_psSizes[i].crc;
-            return true;
+            found = true;
+            break;
         }
         i = (i + 1) & (g_psCap - 1);
     }
-    return false;
+    ReleaseSRWLockShared(&g_psLock);
+    return found;
 }
 
 // Write a candidate shader's bytecode next to the exe as GP_cand_<crc>.dxbc so it
 // can be disassembled with: fxc /dumpbin /nologo GP_cand_XXXXXXXX.dxbc
 static void DumpCandidateShader(ID3D11PixelShader* ps, uint32_t crc)
 {
-    if (!ps || !g_psCap) return;
+    if (!ps) return;
+    PsSharedGuard guard;
+    if (!g_psCap) return;
     int i = PsHash(ps, g_psCap);
     while (g_psSizes[i].ps) {
         if (g_psSizes[i].ps == ps) {
@@ -716,7 +892,6 @@ static void DumpCandidateShader(ID3D11PixelShader* ps, uint32_t crc)
         i = (i + 1) & (g_psCap - 1);
     }
 }
-
 static void RefreshProbeScaleFlag()
 {
     bool on = GetFileAttributesA((ExeDir() + "\\GP_probe_scale.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
@@ -756,6 +931,201 @@ static PFN_CopySub g_origCopySub = nullptr;
 static PFN_Resolve g_origResolve = nullptr;
 static long g_scaleCopies = 0;
 
+// ---- one-shot readback of the upscale input --------------------------------
+// The FSR1 question is not "which pass" any more, it is "what colour space is
+// that pass fed". EASU requires a display-referred [0,1] RGB input; if the
+// stretch reads scene-linear HDR we must tonemap inside the replacement. So read
+// a grid of the captured SRV and report min/max/mean plus the share of samples
+// above 1.0 (HDR tell-tale). A full dump is written only when
+// GP_upscale_dump_input.txt exists, because it is ~12 MB at 1600x900 RGBA16F.
+static float HalfToFloat(uint16_t h)
+{
+    const uint32_t sign = (uint32_t)(h & 0x8000u) << 16;
+    uint32_t exp = (h & 0x7C00u) >> 10;
+    uint32_t mant = h & 0x03FFu;
+    uint32_t bits;
+    if (exp == 0) {
+        if (mant == 0) { bits = sign; }
+        else {
+            exp = 127 - 15 + 1;
+            while (!(mant & 0x400u)) { mant <<= 1; --exp; }
+            mant &= 0x3FFu;
+            bits = sign | (exp << 23) | (mant << 13);
+        }
+    } else if (exp == 0x1Fu) {
+        bits = sign | 0x7F800000u | (mant << 13);
+    } else {
+        bits = sign | ((exp + (127 - 15)) << 23) | (mant << 13);
+    }
+    float f; memcpy(&f, &bits, 4); return f;
+}
+
+static UINT ProbeBpp(DXGI_FORMAT f)
+{
+    switch (f) {
+    case DXGI_FORMAT_R8_UNORM: case DXGI_FORMAT_A8_UNORM: return 1;
+    case DXGI_FORMAT_R8G8_UNORM: case DXGI_FORMAT_R16_FLOAT: case DXGI_FORMAT_R16_UNORM: return 2;
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: case DXGI_FORMAT_R16G16B16A16_UNORM:
+    case DXGI_FORMAT_R32G32_FLOAT: return 8;
+    case DXGI_FORMAT_R32G32B32A32_FLOAT: return 16;
+    default: return 4;
+    }
+}
+
+static bool ReadPixRGB(DXGI_FORMAT f, const uint8_t* p, float rgb[3])
+{
+    switch (f) {
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: {
+        const uint16_t* q = (const uint16_t*)p;
+        rgb[0] = HalfToFloat(q[0]); rgb[1] = HalfToFloat(q[1]); rgb[2] = HalfToFloat(q[2]);
+        return true;
+    }
+    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        rgb[0] = p[0] / 255.0f; rgb[1] = p[1] / 255.0f; rgb[2] = p[2] / 255.0f; return true;
+    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+        rgb[0] = p[2] / 255.0f; rgb[1] = p[1] / 255.0f; rgb[2] = p[0] / 255.0f; return true;
+    case DXGI_FORMAT_R10G10B10A2_UNORM: {
+        const uint32_t v = *(const uint32_t*)p;
+        rgb[0] = (v & 0x3FFu) / 1023.0f;
+        rgb[1] = ((v >> 10) & 0x3FFu) / 1023.0f;
+        rgb[2] = ((v >> 20) & 0x3FFu) / 1023.0f;
+        return true;
+    }
+    case DXGI_FORMAT_R32_FLOAT: {
+        const float v = *(const float*)p;
+        rgb[0] = rgb[1] = rgb[2] = v; return true;
+    }
+    case DXGI_FORMAT_R32G32B32A32_FLOAT: {
+        const float* q = (const float*)p;
+        rgb[0] = q[0]; rgb[1] = q[1]; rgb[2] = q[2]; return true;
+    }
+    case DXGI_FORMAT_R16G16_FLOAT: {
+        const uint16_t* q = (const uint16_t*)p;
+        rgb[0] = HalfToFloat(q[0]); rgb[1] = HalfToFloat(q[1]); rgb[2] = 0.0f; return true;
+    }
+    default:
+        return false;
+    }
+}
+
+// Read a 256x144 grid of a texture and summarise it. Optionally write the full
+// texture (packed rows) to dumpPath. Returns false when the format is unknown or
+// the readback is impossible (MSAA, staging failure).
+static bool ReadTexStats(ID3D11ShaderResourceView* srv, SeqStats* out, const std::string* dumpPath)
+{
+    if (!srv || !out || !g_dev || !g_ctx) return false;
+    out->have = false;
+
+    ID3D11Resource* res = nullptr;
+    srv->GetResource(&res);
+    if (!res) return false;
+    ID3D11Texture2D* tex = nullptr;
+    if (FAILED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) || !tex) { res->Release(); return false; }
+    D3D11_TEXTURE2D_DESC sd{}; tex->GetDesc(&sd);
+    if (sd.SampleDesc.Count > 1) { tex->Release(); res->Release(); return false; }
+
+    D3D11_TEXTURE2D_DESC st = sd;
+    st.Usage = D3D11_USAGE_STAGING; st.BindFlags = 0;
+    st.CPUAccessFlags = D3D11_CPU_ACCESS_READ; st.MiscFlags = 0;
+    ID3D11Texture2D* stage = nullptr;
+    if (FAILED(g_dev->CreateTexture2D(&st, nullptr, &stage))) { tex->Release(); res->Release(); return false; }
+    g_ctx->CopyResource(stage, tex);
+    D3D11_MAPPED_SUBRESOURCE m{};
+    if (FAILED(g_ctx->Map(stage, 0, D3D11_MAP_READ, 0, &m))) {
+        stage->Release(); tex->Release(); res->Release(); return false;
+    }
+
+    const int GX = 256, GY = 144;
+    const UINT bpp = ProbeBpp(sd.Format);
+    float mn[3] = { 1e30f, 1e30f, 1e30f }, mx[3] = { -1e30f, -1e30f, -1e30f };
+    double sum[3] = { 0, 0, 0 };
+    int cnt = 0, over1 = 0, over4 = 0;
+    for (int gy = 0; gy < GY; gy++) {
+        const UINT py = (UINT)((double)sd.Height * (gy + 0.5) / GY);
+        const uint8_t* row = (const uint8_t*)m.pData + (size_t)py * m.RowPitch;
+        for (int gx = 0; gx < GX; gx++) {
+            const UINT px = (UINT)((double)sd.Width * (gx + 0.5) / GX);
+            float rgb[3];
+            if (!ReadPixRGB(sd.Format, row + (size_t)px * bpp, rgb)) continue;
+            for (int c = 0; c < 3; c++) {
+                if (rgb[c] < mn[c]) mn[c] = rgb[c];
+                if (rgb[c] > mx[c]) mx[c] = rgb[c];
+                sum[c] += rgb[c];
+            }
+            float peak = rgb[0] > rgb[1] ? rgb[0] : rgb[1];
+            if (rgb[2] > peak) peak = rgb[2];
+            if (peak > 1.0f) over1++;
+            if (peak > 4.0f) over4++;
+            cnt++;
+        }
+    }
+
+    if (dumpPath) {
+        FILE* f = fopen(dumpPath->c_str(), "wb");
+        if (f) {
+            for (UINT y = 0; y < sd.Height; y++)
+                fwrite((const uint8_t*)m.pData + (size_t)y * m.RowPitch, 1, (size_t)sd.Width * bpp, f);
+            fclose(f);
+            Log("[GP] dumped %s (%ux%u fmt %d, %u bpp)\n", dumpPath->c_str(), sd.Width, sd.Height, (int)sd.Format, bpp);
+        }
+    }
+    g_ctx->Unmap(stage, 0);
+
+    if (cnt) {
+        out->have = true; out->w = sd.Width; out->h = sd.Height; out->fmt = (int)sd.Format; out->n = cnt;
+        for (int c = 0; c < 3; c++) {
+            out->mn[c] = mn[c]; out->mx[c] = mx[c]; out->mean[c] = (float)(sum[c] / cnt);
+        }
+        out->over1 = 100.0f * over1 / cnt;
+        out->over4 = 100.0f * over4 / cnt;
+        if (mx[0] == 0.0f && mx[1] == 0.0f && mx[2] == 0.0f) {
+            static int zeroLogs = 0;
+            if (zeroLogs < 6) {
+                zeroLogs++;
+                Log("[GP] WARN all-zero readback %ux%u fmt=%d usage=%u bind=%u\n",
+                    sd.Width, sd.Height, (int)sd.Format, sd.Usage, sd.BindFlags);
+            }
+        }
+    }
+    stage->Release(); tex->Release(); res->Release();
+    return out->have;
+}
+
+static void ProbeUpscaleInput(ID3D11ShaderResourceView* srv, uint32_t psCrc,
+                              UINT w, UINT h, int fmt)
+{
+    if (!srv || !g_dev || !g_ctx) return;
+    static struct { uint32_t crc; UINT w, h; } seen[16];
+    static int nseen = 0;
+    for (int i = 0; i < nseen; i++)
+        if (seen[i].crc == psCrc && seen[i].w == w && seen[i].h == h) return;
+    if (nseen < 16) { seen[nseen].crc = psCrc; seen[nseen].w = w; seen[nseen].h = h; nseen++; }
+
+    const bool wantDump = GetFileAttributesA((ExeDir() + "\\GP_upscale_dump_input.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+    std::string dump;
+    if (wantDump) {
+        char name[96];
+        snprintf(name, sizeof(name), "\\GP_up_in_%08X_%ux%u.raw", psCrc, w, h);
+        dump = ExeDir() + name;
+    }
+    SeqStats st{};
+    if (!ReadTexStats(srv, &st, wantDump ? &dump : nullptr)) {
+        Log("[GP] upscale input %08X %ux%u fmt=%d: unsupported for readback\n", psCrc, w, h, fmt);
+        return;
+    }
+    Log("[GP] upscale input %08X %ux%u fmt=%d: min=(%.4f %.4f %.4f) max=(%.4f %.4f %.4f) mean=(%.3f %.3f %.3f) >1=%.1f%% >4=%.1f%% n=%d\n",
+        psCrc, st.w, st.h, st.fmt,
+        st.mn[0], st.mn[1], st.mn[2], st.mx[0], st.mx[1], st.mx[2],
+        st.mean[0], st.mean[1], st.mean[2], st.over1, st.over4, st.n);
+    const float maxc = st.mx[0] > st.mx[1] ? (st.mx[0] > st.mx[2] ? st.mx[0] : st.mx[2])
+                                          : (st.mx[1] > st.mx[2] ? st.mx[1] : st.mx[2]);
+    const bool hdr = (st.over4 > 0.0f) || (maxc > 1.5f);
+    Log("[GP] upscale input verdict: %s (max %.3f, %.2f%% of samples > 4)\n",
+        hdr ? "HDR / scene-linear -> tonemap before EASU" : "display-referred [0,1] -> EASU can be used directly",
+        maxc, st.over4);
+}
+
+
 static void RecordScaleCandidate(UINT inW, UINT inH, int fmtIn, UINT outW, UINT outH, int fmtOut,
                                  const char* via, ID3D11PixelShader* ps)
 {
@@ -770,25 +1140,57 @@ static void RecordScaleCandidate(UINT inW, UINT inH, int fmtIn, UINT outW, UINT 
     const uint64_t psKey = (uint64_t)(uintptr_t)ps;
     if (ps) LookupPixelShader(ps, &psSize, &psCrc);
 
+    // Priority: the passes that can actually be *the* stretch touch either the
+    // internal render size (as input) or the back buffer (as output). Everything
+    // else is bloom/SSAO/UI noise and may be evicted when the table is full.
+    int prio = 0;
+    if (g_bbW && outW == g_bbW && outH == g_bbH) prio = 2;
+    if (g_cfgRenderW && inW == g_cfgRenderW && inH == g_cfgRenderH) prio = 2;
+
     int slot = -1;
     for (int k = 0; k < g_scaleSeenN; k++) {
         if (g_scaleSeen[k].inW == inW && g_scaleSeen[k].inH == inH &&
             g_scaleSeen[k].outW == outW && g_scaleSeen[k].outH == outH &&
             g_scaleSeen[k].psKey == psKey) { slot = k; break; }
     }
-    if (slot < 0 && g_scaleSeenN < 32) {
-        slot = g_scaleSeenN++;
+
+    bool fresh = false;
+    if (slot < 0) {
+        if (g_scaleSeenN < kScaleSeenMax) {
+            slot = g_scaleSeenN++;
+            fresh = true;
+        } else if (prio > 0) {
+            // Evict the least interesting entry (lowest priority, then fewest hits).
+            int victim = -1;
+            for (int k = 0; k < g_scaleSeenN; k++) {
+                if (g_scaleSeen[k].prio >= prio) continue;
+                if (victim < 0 || g_scaleSeen[k].prio < g_scaleSeen[victim].prio ||
+                    (g_scaleSeen[k].prio == g_scaleSeen[victim].prio && g_scaleSeen[k].hits < g_scaleSeen[victim].hits))
+                    victim = k;
+            }
+            if (victim >= 0) {
+                Log("[GP] UPSCALE table full -> evicted %ux%u -> %ux%u (prio %d, hits %ld)\n",
+                    g_scaleSeen[victim].inW, g_scaleSeen[victim].inH,
+                    g_scaleSeen[victim].outW, g_scaleSeen[victim].outH,
+                    g_scaleSeen[victim].prio, g_scaleSeen[victim].hits);
+                slot = victim;
+                fresh = true;
+            }
+        }
+    }
+    if (fresh) {
         g_scaleSeen[slot].inW = inW; g_scaleSeen[slot].inH = inH;
         g_scaleSeen[slot].outW = outW; g_scaleSeen[slot].outH = outH;
         g_scaleSeen[slot].psSize = psSize; g_scaleSeen[slot].psCrc = psCrc;
         g_scaleSeen[slot].psKey = psKey;
         g_scaleSeen[slot].fmtIn = fmtIn; g_scaleSeen[slot].fmtOut = fmtOut;
+        g_scaleSeen[slot].prio = prio;
         g_scaleSeen[slot].hits = 0;
         snprintf(g_scaleSeen[slot].via, sizeof(g_scaleSeen[slot].via), "%s", via ? via : "?");
-        if (g_scaleLogs < 24) {
+        if (g_scaleLogs < 24 || prio > 0) {
             g_scaleLogs++;
-            Log("[GP] UPSCALE CANDIDATE %ux%u -> %ux%u fmt %d->%d psLen=%u psCrc=%08X via=%s\n",
-                inW, inH, outW, outH, fmtIn, fmtOut, psSize, psCrc, via ? via : "?");
+            Log("[GP] UPSCALE CANDIDATE %ux%u -> %ux%u fmt %d->%d psLen=%u psCrc=%08X via=%s prio=%d\n",
+                inW, inH, outW, outH, fmtIn, fmtOut, psSize, psCrc, via ? via : "?", prio);
             if (psSize) {
                 // GP_replace.txt format is: <size> <crc> <payload>
                 // <size> must equal the length the GAME passes to CreatePixelShader,
@@ -918,6 +1320,8 @@ static void ProbeUpscale(ID3D11DeviceContext* ctx, UINT vertexCount)
     int fmtIn = 0;
     UINT seenMaxW = 0, seenMaxH = 0;   // largest texture seen at all (diagnostic)
     int  seenFmt = 0;                  // its format, so same-size passes report one
+    ID3D11ShaderResourceView* bestSrv = nullptr;   // owned; the input we picked
+    ID3D11ShaderResourceView* bestSrvAny = nullptr; // owned; largest bound texture
 
     for (int pass = 0; pass < 2; pass++) {
         ID3D11ShaderResourceView* srvs[128] = {};
@@ -934,9 +1338,19 @@ static void ProbeUpscale(ID3D11DeviceContext* ctx, UINT vertexCount)
                     D3D11_TEXTURE2D_DESC d{}; tex->GetDesc(&d);
                     const UINT px = d.Width * d.Height;
                     BumpSize(g_censusIn, &g_censusInN, d.Width, d.Height);
-                    if (px > seenMaxW * seenMaxH) { seenMaxW = d.Width; seenMaxH = d.Height; seenFmt = (int)d.Format; }
+                    if (px > seenMaxW * seenMaxH) {
+                        seenMaxW = d.Width; seenMaxH = d.Height; seenFmt = (int)d.Format;
+                        if (bestSrvAny) bestSrvAny->Release();
+                        bestSrvAny = srvs[i];
+                        bestSrvAny->AddRef();
+                    }
                     if (px >= kMinSrcPixels && d.Width < outW && d.Height < outH) {
-                        if (px > inW * inH) { inW = d.Width; inH = d.Height; fmtIn = (int)d.Format; }
+                        if (px > inW * inH) {
+                            inW = d.Width; inH = d.Height; fmtIn = (int)d.Format;
+                            if (bestSrv) bestSrv->Release();
+                            bestSrv = srvs[i];
+                            bestSrv->AddRef();
+                        }
                     }
                     tex->Release();
                 }
@@ -949,28 +1363,61 @@ static void ProbeUpscale(ID3D11DeviceContext* ctx, UINT vertexCount)
         // Nothing on the unit was both large enough and smaller than the target.
         // Remember the biggest thing we did see, so the report can say whether a
         // stretch happened here at all (biggest == out means a 1:1 pass).
-        RecordSeq(seqCrc, seenMaxW, seenMaxH, seenFmt, outW, outH, fmtOut, seqPsLen);
+        SeqEntry* eq = RecordSeq(seqCrc, seenMaxW, seenMaxH, seenFmt, outW, outH, fmtOut, seqPsLen);
+        if (eq && g_seqArmed && g_seqStatsBudget > 0 && bestSrvAny) {
+            --g_seqStatsBudget;
+            ReadTexStats(bestSrvAny, &eq->src, nullptr);
+        }
         if (seenMaxW && seenMaxH && (seenMaxW < outW || seenMaxH < outH) && g_scaleUnknownLogs < 8) {
             g_scaleUnknownLogs++;
             Log("[GP] SCALE? no usable src for %ux%u (biggest bound %ux%u)\n",
                 outW, outH, seenMaxW, seenMaxH);
         }
+        if (bestSrv) bestSrv->Release();
+        if (bestSrvAny) bestSrvAny->Release();
         return;
     }
 
     // Record every fullscreen pass, including same-size ones (tonemap, AA):
     // the ordering between tonemap and the stretch is what we need to know.
     // For a same-size pass inW==outW, so the largest bound texture is used.
-    RecordSeq(seqCrc, inW ? inW : seenMaxW, inH ? inH : seenMaxH,
-              inW ? fmtIn : seenFmt, outW, outH, fmtOut, seqPsLen);
+    SeqEntry* se = RecordSeq(seqCrc, inW ? inW : seenMaxW, inH ? inH : seenMaxH,
+                             inW ? fmtIn : seenFmt, outW, outH, fmtOut, seqPsLen);
+    // Capture frame: measure what this pass actually sampled, so one session
+    // yields the colour range of every stage instead of one question per launch.
+    if (se && g_seqArmed && g_seqStatsBudget > 0) {
+        ID3D11ShaderResourceView* use = bestSrv ? bestSrv : bestSrvAny;
+        if (use) {
+            --g_seqStatsBudget;
+            // Read here (proven path: this is where the upscale probe has always
+            // read back) and keep the SRV so Present can retry if this frame's
+            // read came back empty.
+            ReadTexStats(use, &se->src, nullptr);
+            se->srv = use;
+            se->srv->AddRef();
+        }
+    }
 
     // The signature we want: input strictly smaller than output.
-    if (inW >= outW || inH >= outH) return;
+    if (inW >= outW || inH >= outH) {
+        if (bestSrv) bestSrv->Release();
+        if (bestSrvAny) bestSrvAny->Release();
+        return;
+    }
 
     ID3D11PixelShader* ps = nullptr;
     ctx->PSGetShader(&ps, nullptr, 0);
     RecordScaleCandidate(inW, inH, fmtIn, outW, outH, fmtOut, "Draw", ps);
     if (ps) ps->Release();
+
+    // Colour-space evidence for the only pass that could be the stretch: the one
+    // that reads the internal render size and/or writes the back buffer.
+    const bool interesting =
+        (g_cfgRenderW && inW == g_cfgRenderW && inH == g_cfgRenderH) ||
+        (g_bbW && outW == g_bbW && outH == g_bbH);
+    if (interesting && bestSrv) ProbeUpscaleInput(bestSrv, seqCrc, inW, inH, fmtIn);
+    if (bestSrv) bestSrv->Release();
+    if (bestSrvAny) bestSrvAny->Release();
 }
 
 static void WriteScaleReport()
@@ -979,10 +1426,14 @@ static void WriteScaleReport()
     FILE* f = fopen((ExeDir() + "\\GP_upscale.txt").c_str(), "w");
     if (!f) return;
     fprintf(f, "# upscale probe report\n");
-    fprintf(f, "fullscreen_draws=%ld  upscale_candidates_hits=%ld  distinct=%d  psKnown=%d\n",
-            g_scaleFullscreen, g_scaleDraws, g_scaleSeenN, g_psCount);
+    fprintf(f, "fullscreen_draws=%ld  upscale_candidates_hits=%ld  distinct=%d/%d  psKnown=%d\n",
+            g_scaleFullscreen, g_scaleDraws, g_scaleSeenN, kScaleSeenMax, g_psCount);
     fprintf(f, "backbuffer=%ux%u   renderW/H from Arma3.cfg: %u/%u\n",
             g_bbW, g_bbH, g_cfgRenderW, g_cfgRenderH);
+    if (g_scaleSeenN >= kScaleSeenMax)
+        fprintf(f, "NOTE: candidate table is full (%d). Rows are priority-evicted, but a\n"
+                   "      missing pass may still mean it lost the slot race; raise kScaleSeenMax.\n",
+                kScaleSeenMax);
 
     // The one question that decides everything: does the internal render size
     // ever appear on a fullscreen draw? If not, the stretch is not a Draw.
@@ -1000,17 +1451,16 @@ static void WriteScaleReport()
                     g_cfgRenderW, g_cfgRenderH, g_bbW, g_bbH);
         }
     }
-    fprintf(f, "\n");
-    fprintf(f, "%-18s %-18s %-10s %-9s %-9s %s\n",
-            "input(SRV)", "output(RTV)", "fmt in/out", "psLen", "psCrc", "via");
+    fprintf(f, "\n%-4s %-18s %-18s %-10s %-9s %-9s %s\n",
+            "prio", "input(SRV)", "output(RTV)", "fmt in/out", "psLen", "psCrc", "via");
     for (int k = 0; k < g_scaleSeenN; k++) {
         const ScaleSeen& s = g_scaleSeen[k];
         char a[24], b[24], c[24];
         snprintf(a, sizeof(a), "%ux%u", s.inW, s.inH);
         snprintf(b, sizeof(b), "%ux%u", s.outW, s.outH);
         snprintf(c, sizeof(c), "%d/%d", s.fmtIn, s.fmtOut);
-        fprintf(f, "%-18s %-18s %-10s %-9u %08X  %s  hits=%ld\n",
-                a, b, c, s.psSize, s.psCrc, s.via, s.hits);
+        fprintf(f, "%-4d %-18s %-18s %-10s %-9u %08X  %s  hits=%ld\n",
+                s.prio, a, b, c, s.psSize, s.psCrc, s.via, s.hits);
         if (!s.psSize && strcmp(s.via, "Draw") == 0) {
             fprintf(f, "    ^ psLen=0: this shader was not in the create table.\n"
                        "      The Draw path had no record of it; psKey=%016llX.\n",
@@ -1022,6 +1472,10 @@ static void WriteScaleReport()
                    "Meaning: the game likely does not upscale in a single PS pass\n"
                    "(or renderWidth == backbuffer, i.e. Sampling is at 100%%).\n"
                    "Try again with Sampling set to 70%% in game options.\n");
+    } else {
+        fprintf(f, "\nprio 2 = reads the internal render size or writes the back buffer.\n"
+                   "The pass worth replacing is the prio-2 row whose output is the back buffer;\n"
+                   "its colour space is reported in GP_shader.log as \"upscale input ...\".\n");
     }
 
     // Size census, unfiltered. If the internal render size never shows up on
@@ -1100,10 +1554,12 @@ static HRESULT STDMETHODCALLTYPE Hook_Map(ID3D11DeviceContext* ctx, ID3D11Resour
             // Reuse the slot already owned by this resource before claiming a free
             // one: the old code only ever took a virgin slot, so 64 pending Maps
             // could exhaust the table and silently stop classifying buffers.
+            AcquireSRWLockExclusive(&g_mapLock);
             int slot = -1;
             for (int k = 0; k < 64; k++) if (g_maps[k].res == res) { slot = k; break; }
             if (slot < 0) for (int k = 0; k < 64; k++) if (!g_maps[k].res) { slot = k; break; }
             if (slot >= 0) { g_maps[slot].res = res; g_maps[slot].data = mapped->pData; g_maps[slot].size = d.ByteWidth; }
+            ReleaseSRWLockExclusive(&g_mapLock);
         }
     }
     return hr;
@@ -1147,23 +1603,37 @@ static void MaybeDumpCb(const float* f, UINT nbytes, UINT nfloat)
 
 static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resource* res, UINT sub)
 {
+    // Take ownership of the entry under the lock, then do the (relatively heavy)
+    // float processing outside it so another worker's Map is never blocked by us.
+    MapRec rec{};
+    bool have = false;
     if (res) {
+        AcquireSRWLockExclusive(&g_mapLock);
         for (int i = 0; i < 64; i++) {
             if (g_maps[i].res != res || !g_maps[i].data) continue;
-            float* f = (float*)g_maps[i].data;
-            UINT n = g_maps[i].size / 4;
+            rec = g_maps[i];
+            g_maps[i].res = nullptr;
+            g_maps[i].data = nullptr;
+            have = true;
+            break;
+        }
+        ReleaseSRWLockExclusive(&g_mapLock);
+    }
+    if (have) {
+            float* f = (float*)rec.data;
+            UINT n = rec.size / 4;
             {
                 static UINT seen[24]{}; static int nseen = 0;
                 bool dup = false;
-                for (int k = 0; k < nseen; k++) if (seen[k] == g_maps[i].size) { dup = true; break; }
+                for (int k = 0; k < nseen; k++) if (seen[k] == rec.size) { dup = true; break; }
                 if (!dup && nseen < 24) {
-                    seen[nseen++] = g_maps[i].size;
-                    Log("[GP] cb size %u\n", g_maps[i].size);
+                    seen[nseen++] = rec.size;
+                    Log("[GP] cb size %u\n", rec.size);
                 }
-                if (g_maps[i].size >= 1024 && g_maps[i].size <= 2048 && n > 160) {
+                if (rec.size >= 1024 && rec.size <= 2048 && n > 160) {
                     int slot = -1;
-                    for (int k = 0; k < 4; k++) if (g_cbTrackSize[k] == g_maps[i].size) { slot = k; break; }
-                    if (slot < 0) for (int k = 0; k < 4; k++) if (!g_cbTrackSize[k]) { g_cbTrackSize[k] = g_maps[i].size; slot = k; break; }
+                    for (int k = 0; k < 4; k++) if (g_cbTrackSize[k] == rec.size) { slot = k; break; }
+                    if (slot < 0) for (int k = 0; k < 4; k++) if (!g_cbTrackSize[k]) { g_cbTrackSize[k] = rec.size; slot = k; break; }
                     if (slot >= 0) {
                         g_cbTrackCount[slot]++;
                         if (g_cbTrackLogs[slot] < 3 && (g_cbTrackCount[slot] % 200) == 0) {
@@ -1174,10 +1644,10 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                         }
                     }
                 }
-                MaybeDumpCb(f, g_maps[i].size, n);
+                MaybeDumpCb(f, rec.size, n);
             }
             // Capture sun-like float3 from bound lighting CB.
-            if (g_lightBindSize && g_maps[i].size == g_lightBindSize && g_lightBindIdx >= 0
+            if (g_lightBindSize && rec.size == g_lightBindSize && g_lightBindIdx >= 0
                 && (UINT)(g_lightBindIdx + 2) < n) {
                 float x = f[g_lightBindIdx], y = f[g_lightBindIdx + 1], z = f[g_lightBindIdx + 2];
                 float len = sqrtf(x * x + y * y + z * z);
@@ -1194,7 +1664,7 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                     }
                 }
             }
-            if (g_expoSize && g_maps[i].size == g_expoSize && n > 151) {
+            if (g_expoSize && rec.size == g_expoSize && n > 151) {
                 static int expoHits = 0;
                 static int expoFpReject = 0;
                 expoHits++;
@@ -1251,8 +1721,19 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                     f[322] = g_sceneTopBright;
                     f[323] = g_adaptOn ? 1.0f : 0.0f;
                 }
+                // Live AgX tune through c[82]/c[83]. Only written while
+                // GP_agx.txt exists, so the baked-in defaults come back the
+                // moment the file is removed (WRITE_DISCARD gives us a fresh
+                // buffer every frame; nothing is inherited).
+                if (fp && g_agxOn && n > 332) {
+                    f[328] = g_agxE;
+                    f[329] = g_agxK;
+                    f[330] = g_agxS;
+                    f[331] = 1.0f;
+                    f[332] = g_agxShoulder;
+                }
             }
-            if (g_maps[i].size == 224 && n >= 40) {
+            if (rec.size == 224 && n >= 40) {
                 // 224 B is the per-draw material CB (PSCB_Object1), but size alone
                 // has burned us before (see the expo fingerprint saga: one shared
                 // size, several owners). Guard the write with a validity check and
@@ -1298,9 +1779,6 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                     if (g_aeScale > 0.0f) { f[4] *= g_aeScale * g_tintR; f[5] *= g_aeScale; f[6] *= g_aeScale * g_tintB; }
                 }
             }
-            g_maps[i].res = nullptr;
-            break;
-        }
     }
     g_origUnmap(ctx, res, sub);
 }
@@ -1610,7 +2088,13 @@ static void STDMETHODCALLTYPE Hook_OMSetRT(ID3D11DeviceContext* ctx, UINT n, ID3
         }
     }
 
-    if (dsv && g_bbW && g_bbH) {
+    // Depth-candidate bookkeeping is only needed when something actually consumes
+    // it: the (currently shelved) Present pass or the MRT probe. OMSetRenderTargets
+    // is called once per draw, so an unconditional GetResource/QueryInterface/GetDesc
+    // here is a measurable COM tax on a CPU-bound engine. Also skip the round trip
+    // when the DSV is unchanged and no per-frame probe sampling is required.
+    const bool wantDepthTrack = (g_presentMode != 2) || g_probeMrt;
+    if (dsv && wantDepthTrack && g_bbW && g_bbH && (dsv != g_lastDSV || g_probeMrt)) {
         const bool dsvChanged = (dsv != g_lastDSV);
         if (dsvChanged) g_lastDSV = dsv;
         ID3D11Resource* res = nullptr;
@@ -2195,73 +2679,104 @@ static void DepthProbe()
     }
 }
 
-static void ReleaseHistResources()
+// --- Present pass resources: created on demand, released on resize ----------
+// These used to be created at the first Present and never freed. That held a
+// reference to back buffer 0 (so ResizeBuffers could only fail) and kept the
+// temporal history textures alive for a pass that is shelved anyway.
+static void ReleasePresentResources()
 {
-    for (int i = 0; i < 2; i++) {
-        if (g_histSRV[i]) { g_histSRV[i]->Release(); g_histSRV[i] = nullptr; }
-        if (g_histRTV[i]) { g_histRTV[i]->Release(); g_histRTV[i] = nullptr; }
-        if (g_histTex[i]) { g_histTex[i]->Release(); g_histTex[i] = nullptr; }
-    }
-    g_histValid = 0;
-    g_histWrite = 0;
+    if (g_bbRTV) { g_bbRTV->Release(); g_bbRTV = nullptr; }
+    if (g_colorSRV) { g_colorSRV->Release(); g_colorSRV = nullptr; }
+    if (g_colorTex) { g_colorTex->Release(); g_colorTex = nullptr; }
+    if (g_vs) { g_vs->Release(); g_vs = nullptr; }
+    if (g_ps) { g_ps->Release(); g_ps = nullptr; }
+    if (g_psMS) { g_psMS->Release(); g_psMS = nullptr; }
+    if (g_psAO) { g_psAO->Release(); g_psAO = nullptr; }
+    if (g_smp) { g_smp->Release(); g_smp = nullptr; }
+    if (g_cb) { g_cb->Release(); g_cb = nullptr; }
+    if (g_blendOpaque) { g_blendOpaque->Release(); g_blendOpaque = nullptr; }
+    if (g_dssNoDepth) { g_dssNoDepth->Release(); g_dssNoDepth = nullptr; }
+    g_presentReady = false;
+    g_bbW = 0; g_bbH = 0; g_bbFmt = DXGI_FORMAT_UNKNOWN; g_bbSamples = 1;
 }
 
-static bool CreateHistResources(UINT w, UINT h)
+// Cache the swap-chain description without keeping a buffer reference. Needed
+// even when the Present pass is off, because the depth-candidate rule compares
+// DSVs against the back-buffer size.
+static bool EnsureSwapInfo(IDXGISwapChain* sc)
 {
-    ReleaseHistResources();
-    for (int i = 0; i < 2; i++) {
-        D3D11_TEXTURE2D_DESC td{};
-        td.Width = w; td.Height = h; td.MipLevels = 1; td.ArraySize = 1;
-        td.Format = DXGI_FORMAT_R16G16_FLOAT;
-        td.SampleDesc.Count = 1; td.Usage = D3D11_USAGE_DEFAULT;
-        td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-        if (FAILED(g_dev->CreateTexture2D(&td, nullptr, &g_histTex[i]))) return false;
-        if (FAILED(g_dev->CreateRenderTargetView(g_histTex[i], nullptr, &g_histRTV[i]))) return false;
-        if (FAILED(g_dev->CreateShaderResourceView(g_histTex[i], nullptr, &g_histSRV[i]))) return false;
-    }
-    g_histValid = 0;
-    g_histWrite = 0;
-    Log("[GP] hist RT %ux%u RG16F ready\n", w, h);
+    if (!sc) return false;
+    if (g_bbW && g_bbH) return true;
+    ID3D11Texture2D* bb = nullptr;
+    if (FAILED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)) || !bb) return false;
+    D3D11_TEXTURE2D_DESC d{}; bb->GetDesc(&d);
+    bb->Release();                 // ResizeBuffers requires every reference to be gone
+    g_bbW = d.Width; g_bbH = d.Height; g_bbFmt = d.Format; g_bbSamples = d.SampleDesc.Count;
+    Log("[GP] swapchain %ux%u fmt %d samples %u\n", d.Width, d.Height, (int)d.Format, d.SampleDesc.Count);
     return true;
 }
 
-static void EnsurePresentResources(IDXGISwapChain* sc)
+static bool EnsureColorCopy(IDXGISwapChain* sc)
 {
-    if (g_presentReady || !g_dev || !g_ctx) return;
-    ID3D11Texture2D* bb = nullptr;
-    if (FAILED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)) || !bb) return;
-    D3D11_TEXTURE2D_DESC d{}; bb->GetDesc(&d);
-    HRESULT hr = g_dev->CreateRenderTargetView(bb, nullptr, &g_bbRTV);
-    if (FAILED(hr)) { Log("[GP] present rtv failed hr=%08X fmt %d\n", (unsigned)hr, (int)d.Format); bb->Release(); return; }
-    hr = g_dev->CreateVertexShader(kFullscreenVS, kFullscreenVSSize, nullptr, &g_vs);
-    if (FAILED(hr)) { Log("[GP] present vs failed hr=%08X\n", (unsigned)hr); bb->Release(); return; }
-    hr = g_dev->CreatePixelShader(kFullscreenPS, kFullscreenPSSize, nullptr, &g_ps);
-    if (FAILED(hr)) { Log("[GP] present ps failed hr=%08X\n", (unsigned)hr); bb->Release(); return; }
-    hr = g_dev->CreatePixelShader(kFullscreenPSMS, kFullscreenPSMSSize, nullptr, &g_psMS);
-    if (FAILED(hr)) Log("[GP] present psMS failed hr=%08X\n", (unsigned)hr);
-    hr = g_dev->CreatePixelShader(kFullscreenPSAO, kFullscreenPSAOSize, nullptr, &g_psAO);
-    if (FAILED(hr)) Log("[GP] present psAO failed hr=%08X\n", (unsigned)hr);
-    if (d.SampleDesc.Count > 1) Log("[GP] backbuffer is MSAA x%u, colour copy will fail\n", d.SampleDesc.Count);
-    D3D11_TEXTURE2D_DESC c = d;
+    if (g_colorTex && g_colorSRV) return true;
+    if (!g_dev || !g_ctx || !EnsureSwapInfo(sc)) return false;
+    D3D11_TEXTURE2D_DESC c{};
+    c.Width = g_bbW; c.Height = g_bbH; c.MipLevels = 1; c.ArraySize = 1;
+    c.Format = g_bbFmt; c.SampleDesc.Count = 1; c.SampleDesc.Quality = 0;
     c.Usage = D3D11_USAGE_DEFAULT; c.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    c.CPUAccessFlags = 0; c.MiscFlags = 0; c.SampleDesc.Count = 1; c.SampleDesc.Quality = 0;
-    hr = g_dev->CreateTexture2D(&c, nullptr, &g_colorTex);
-    if (FAILED(hr)) { Log("[GP] present colour tex failed hr=%08X\n", (unsigned)hr); bb->Release(); return; }
+    c.CPUAccessFlags = 0; c.MiscFlags = 0;
+    HRESULT hr = g_dev->CreateTexture2D(&c, nullptr, &g_colorTex);
+    if (FAILED(hr)) {
+        g_colorTex = nullptr;
+        Log("[GP] colour tex failed hr=%08X %ux%u fmt %d\n", (unsigned)hr, g_bbW, g_bbH, (int)g_bbFmt);
+        return false;
+    }
     hr = g_dev->CreateShaderResourceView(g_colorTex, nullptr, &g_colorSRV);
-    if (FAILED(hr)) { Log("[GP] present colour srv failed hr=%08X\n", (unsigned)hr); bb->Release(); return; }
+    if (FAILED(hr)) {
+        Log("[GP] colour srv failed hr=%08X\n", (unsigned)hr);
+        g_colorTex->Release(); g_colorTex = nullptr;
+        return false;
+    }
+    return true;
+}
+
+static bool EnsurePresentResources(IDXGISwapChain* sc)
+{
+    if (g_presentReady) return true;
+    // A previous attempt may have died between "RTV created" and "ready"; do not
+    // leak that RTV when we retry.
+    if (g_bbRTV) { g_bbRTV->Release(); g_bbRTV = nullptr; }
+    if (!g_dev || !g_ctx || !sc || !EnsureSwapInfo(sc)) return false;
+    ID3D11Texture2D* bb = nullptr;
+    if (FAILED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)) || !bb) return false;
+    HRESULT hr = g_dev->CreateRenderTargetView(bb, nullptr, &g_bbRTV);
+    bb->Release();                 // the RTV keeps its own reference
+    if (FAILED(hr)) {
+        Log("[GP] present rtv failed hr=%08X fmt %d\n", (unsigned)hr, (int)g_bbFmt);
+        return false;
+    }
+    hr = g_dev->CreateVertexShader(kFullscreenVS, kFullscreenVSSize, nullptr, &g_vs);
+    if (FAILED(hr)) { Log("[GP] present vs failed hr=%08X\n", (unsigned)hr); return false; }
+    hr = g_dev->CreatePixelShader(kFullscreenPS, kFullscreenPSSize, nullptr, &g_ps);
+    if (FAILED(hr)) { Log("[GP] present ps failed hr=%08X\n", (unsigned)hr); return false; }
+    if (FAILED(g_dev->CreatePixelShader(kFullscreenPSMS, kFullscreenPSMSSize, nullptr, &g_psMS)))
+        Log("[GP] present psMS failed\n");
+    if (FAILED(g_dev->CreatePixelShader(kFullscreenPSAO, kFullscreenPSAOSize, nullptr, &g_psAO)))
+        Log("[GP] present psAO failed\n");
+    if (g_bbSamples > 1) Log("[GP] backbuffer is MSAA x%u, colour copy will fail\n", g_bbSamples);
+    if (!EnsureColorCopy(sc)) return false;
     D3D11_BUFFER_DESC cbd{};
     cbd.ByteWidth = 64; cbd.Usage = D3D11_USAGE_DEFAULT; cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     hr = g_dev->CreateBuffer(&cbd, nullptr, &g_cb);
-    if (FAILED(hr)) { Log("[GP] present cb failed hr=%08X\n", (unsigned)hr); bb->Release(); return; }
+    if (FAILED(hr)) { Log("[GP] present cb failed hr=%08X\n", (unsigned)hr); return false; }
     D3D11_SAMPLER_DESC sd{};
     sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
     sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     sd.MaxLOD = D3D11_FLOAT32_MAX;
-    if (FAILED(g_dev->CreateSamplerState(&sd, &g_smp))) { bb->Release(); return; }
+    if (FAILED(g_dev->CreateSamplerState(&sd, &g_smp))) return false;
     {
         D3D11_BLEND_DESC bd{};
         bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-        bd.RenderTarget[1].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
         if (FAILED(g_dev->CreateBlendState(&bd, &g_blendOpaque)))
             Log("[GP] present blend state failed\n");
         D3D11_DEPTH_STENCIL_DESC dd{};
@@ -2271,18 +2786,16 @@ static void EnsurePresentResources(IDXGISwapChain* sc)
         if (FAILED(g_dev->CreateDepthStencilState(&dd, &g_dssNoDepth)))
             Log("[GP] present dss failed\n");
     }
-    if (!CreateHistResources(d.Width, d.Height)) {
-        Log("[GP] hist RT create failed — temporal disabled\n");
-    }
-    g_bbTex = bb; g_bbW = d.Width; g_bbH = d.Height; g_presentReady = true;
-    Log("[GP] present ready %ux%u fmt %d samples %u\n", d.Width, d.Height, (int)d.Format, d.SampleDesc.Count);
+    g_presentReady = true;
+    Log("[GP] present ready %ux%u fmt %d samples %u\n", g_bbW, g_bbH, (int)g_bbFmt, g_bbSamples);
+    return true;
 }
 
 typedef HRESULT (STDMETHODCALLTYPE *PFN_Present)(IDXGISwapChain*, UINT, UINT);
 static PFN_Present g_origPresent = nullptr;
 
-// GP_present.txt is re-read in flight so the AO can be tuned without restarting:
-//   mode strength radius thickness frac
+// GP_present.txt is re-read in flight so the contact pass can be tuned without
+// restarting:  mode strength radius_m projK frac [alpha luma0 luma1]
 static void ReloadExpoCfg()
 {
     FILE* ef = fopen((ExeDir() + "\\GP_expo.txt").c_str(), "r");
@@ -2304,9 +2817,29 @@ static void ReloadPresentCfg()
     {
         FILE* sf = fopen((ExeDir() + "\\GP_spec.txt").c_str(), "r");
         if (sf) { ParseSpecFile(sf); fclose(sf); }
+        // Removing the file must return to "no specular injection", otherwise a
+        // deleted preset keeps boosting until the process restarts (the same bug
+        // class already fixed for expo and light).
+        else if (g_specMode || g_specBoost > 0.0f) {
+            g_specMode = 0; g_specBoost = 0.0f; g_specPower = 0.0f;
+            Log("[GP] spec cfg: removed -> disabled\n");
+        }
         FILE* af = fopen((ExeDir() + "\\GP_amb.txt").c_str(), "r");
-        if (af) { float a = 0, b = 0, tr = 0.95f, tb = 1.06f; int got = fscanf(af, "%f %f %f %f", &a, &b, &tr, &tb); fclose(af);
-                  if (got >= 2) { g_ambScale = a; g_aeScale = b; } if (got >= 4) { g_tintR = tr; g_tintB = tb; } }
+        if (af) { ParseAmbFile(af); fclose(af); }
+        else if (g_ambScale > 0.0f || g_aeScale > 0.0f) {
+            g_ambScale = 0.0f; g_aeScale = 0.0f;
+            Log("[GP] amb cfg: removed -> disabled\n");
+        }
+        // AgX tune: hot, and removing the file hands the look back to the
+        // shader's baked-in values (same policy as expo / light / spec).
+        {
+            FILE* ax = fopen((ExeDir() + "\\GP_agx.txt").c_str(), "r");
+            if (ax) { ParseAgxFile(ax); fclose(ax); }
+            else if (g_agxOn) {
+                g_agxOn = 0;
+                Log("[GP] agx tune: removed -> baked-in defaults\n");
+            }
+        }
     }
     FILE* pf = fopen((ExeDir() + "\\GP_present.txt").c_str(), "r");
     if (pf) { ParsePresentLine(pf); fclose(pf); }
@@ -2422,9 +2955,9 @@ static void SampleSceneStats()
 }
 
 // Touch GP_dump.txt and the next presented frame is written out as
-// GP_shot_<n>.rgb (RGBA8) + GP_shot_<n>.dep (R24G8). The trigger file is
-// removed, so one file = one grab. Lets settings be compared numerically
-// without asking for screenshots.
+// GP_shot_<n>.rgb (RGBA8). The trigger file is removed, so one file = one grab.
+// Lets settings be compared numerically without asking for screenshots.
+// (Depth is handled separately by the GP_depth_<frame>.raw dumps in DumpIfDue.)
 static void OnDemandDump(IDXGISwapChain* sc)
 {
     static int shot = 0;
@@ -2466,17 +2999,56 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
     g_mrtPresentSeq++;
     if (g_probeMrt) g_presentMode = 2;
     CheckScaleDumpRequest();
+    // Manual capture trigger: create GP_capture_now.txt while standing in the
+    // world. Auto-capture cannot know that the loading screen has finished.
+    {
+        const std::string trig = ExeDir() + "\\GP_capture_now.txt";
+        if (GetFileAttributesA(trig.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            DeleteFileA(trig.c_str());
+            if (g_probeScale && !g_seqDone) {
+                g_seqArmed = true;
+                g_captureTry = 0;
+                Log("[GP] capture triggered manually\n");
+            }
+        }
+    }
+
     // Capture the pass order of ONE settled frame (after load, before shutdown).
-    // g_seqCount is reset every frame so the dump reflects a single frame; the
-    // target frame is simply the first one that contains the stretch pass.
+    // Two-phase: the first frame that looks like a real scene only ARMS the
+    // capture; the next one is recorded with per-pass colour statistics.
     if (g_probeScale && !g_seqDone) {
         g_seqFrame++;
-        if (g_seqFrame > 240) {
-            bool hasStretch = false;
-            for (int k = 0; k < g_seqCount; k++) if (g_seq[k].crc == kStretchCrc) { hasStretch = true; break; }
-            if (hasStretch) { DumpSeqOnce(); AnalyzeSeqOrder(); }
+        // Qualify on geometry, not only on the known stretch crc: the final
+        // upscale is "smaller input -> back buffer", and hard-coding a crc
+        // means the capture silently stops working after an A3 update.
+        bool hasStretch = false;
+        for (int k = 0; k < g_seqCount; k++) {
+            const SeqEntry& e = g_seq[k];
+            if (e.crc == kStretchCrc) { hasStretch = true; break; }
+            if (g_bbW && e.outW == g_bbW && e.outH == g_bbH && (e.inW < e.outW || e.inH < e.outH)) {
+                hasStretch = true; break;
+            }
         }
-        g_seqCount = 0;   // this frame is done either way
+        if (g_seqArmed) {
+            g_captureTry++;
+            // A menu / loading frame has one or two fullscreen passes; a real
+            // scene has dozens. Capturing the former yields a useless chain, so
+            // wait for a frame that has both the stretch and some depth to it.
+            if (hasStretch && g_seqCount >= 6) {
+                DumpSeqOnce();
+                AnalyzeSeqOrder();
+            } else if (g_captureTry > 600) {
+                Log("[GP] capture: no scene-like frame in %d tries, disarmed\n", g_captureTry);
+                g_seqArmed = false;
+                g_captureTry = 0;
+            }
+        } else if (g_seqFrame > 240 && hasStretch) {
+            g_seqArmed = true;
+            g_captureTry = 0;
+            Log("[GP] capture armed: next scene-like frame gets per-pass stats\n");
+        }
+        ClearSeq();                  // this frame is done either way
+        g_seqStatsBudget = 64;       // readbacks allowed in the next frame
     }
     // Bind sequence: same idea but driven by PSSetShader, so passes that are not
     // fullscreen quads (notably tonemap) are included.
@@ -2576,13 +3148,15 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
             Log("[GP] draw log written: %d draws (cumulative calls %ld)\n", g_drawIdx, g_drawCalls);
         }
     }
-    if (!g_presentReady) EnsurePresentResources(sc);
+    // Learn the back-buffer size even when the Present pass is off: the depth
+    // candidate rule and the MRT probe both need it. This holds no reference.
+    EnsureSwapInfo(sc);
     // Scene stats feed the adaptive AgX controller and the adaptive-exposure
     // range. Both are opt-in, so skip the full-frame readback entirely when
     // neither is enabled (it costs a GPU->CPU sync every 15 frames).
     g_statsFrame++;
     const bool wantSceneStats = (g_adaptOn != 0) || (g_expoAdapt != 0);
-    if (wantSceneStats && g_presentReady && g_ctx && g_colorTex && sc && (g_statsFrame % 15) == 0) {
+    if (wantSceneStats && g_ctx && sc && (g_statsFrame % 15) == 0 && EnsureColorCopy(sc)) {
         ID3D11Texture2D* sbb = nullptr;
         if (SUCCEEDED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&sbb)) && sbb) {
             g_ctx->CopyResource(g_colorTex, sbb);
@@ -2590,7 +3164,8 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
             SampleSceneStats();
         }
     }
-    if (g_presentReady && g_ctx && g_bbTex && g_presentMode != 2) {
+    if (g_presentMode == 2 && g_presentReady) ReleasePresentResources();
+    if (g_presentMode != 2 && g_ctx && EnsurePresentResources(sc)) {
         if (g_nRejected && (g_presentCount % 600) == 0) { g_nRejected = 0; Log("[GP] depth rejections cleared\n"); }
         UpdateDepthView();
 
@@ -2788,12 +3363,27 @@ static void HookDevice(ID3D11Device* dev)
     Log("[GP] device hooked (deferred slots 27/44/51/62)\n");
 }
 
+// ResizeBuffers fails with DXGI_ERROR_INVALID_CALL while any reference to a
+// back buffer is alive. We hold the RTV and the colour copy, so release them
+// here and let the next Present rebuild at the new size.
+typedef HRESULT (STDMETHODCALLTYPE *PFN_ResizeBuffers)(IDXGISwapChain*, UINT, UINT, UINT, DXGI_FORMAT, UINT);
+static PFN_ResizeBuffers g_origResizeBuffers = nullptr;
+
+static HRESULT STDMETHODCALLTYPE Hook_ResizeBuffers(IDXGISwapChain* sc, UINT bufferCount,
+                                                    UINT w, UINT h, DXGI_FORMAT fmt, UINT flags)
+{
+    ReleasePresentResources();
+    if (g_origResizeBuffers) return g_origResizeBuffers(sc, bufferCount, w, h, fmt, flags);
+    return E_FAIL;
+}
+
 static void HookSwapChain(IDXGISwapChain* sc)
 {
     if (!sc) return;
     void** vt = *(void***)sc;
     if (!vt) return;
     PatchSlot(vt, 8, (void*)Hook_Present, (void**)&g_origPresent);
+    PatchSlot(vt, 13, (void*)Hook_ResizeBuffers, (void**)&g_origResizeBuffers);
     Log("[GP] swapchain hooked\n");
 }
 
@@ -2808,11 +3398,25 @@ static bool InitReal()
     return g_createDevice && g_createDeviceSwap;
 }
 
+// ---------------------------------------------------------------- lifecycle
+// Never do file I/O inside DllMain: the loader lock is held there and opening /
+// logging files under it can deadlock process start. Only the module handle is
+// stored at attach; the config is read on the first device creation.
+static volatile LONG g_initState = 0;   // 0 = not started, 1 = initialising/done
+
+static void EnsureInit()
+{
+    if (InterlockedCompareExchange(&g_initState, 1, 0) != 0) return;
+    LoadConfig();
+    Log("[GP] proxy attached\n");
+}
+
 extern "C" HRESULT WINAPI D3D11CreateDevice(
     IDXGIAdapter* adapter, D3D_DRIVER_TYPE driverType, HMODULE software, UINT flags,
     const D3D_FEATURE_LEVEL* levels, UINT numLevels, UINT sdkVersion,
     ID3D11Device** device, D3D_FEATURE_LEVEL* outLevel, ID3D11DeviceContext** context)
 {
+    EnsureInit();
     if (!InitReal()) return E_FAIL;
     HRESULT hr = g_createDevice(adapter, driverType, software, flags, levels, numLevels, sdkVersion, device, outLevel, context);
     if (SUCCEEDED(hr) && device && *device) { g_dev = *device; HookDevice(*device); }
@@ -2826,6 +3430,7 @@ extern "C" HRESULT WINAPI D3D11CreateDeviceAndSwapChain(
     const DXGI_SWAP_CHAIN_DESC* desc, IDXGISwapChain** swapChain,
     ID3D11Device** device, D3D_FEATURE_LEVEL* outLevel, ID3D11DeviceContext** context)
 {
+    EnsureInit();
     if (!InitReal()) return E_FAIL;
     HRESULT hr = g_createDeviceSwap(adapter, driverType, software, flags, levels, numLevels, sdkVersion, desc, swapChain, device, outLevel, context);
     if (SUCCEEDED(hr) && device && *device) { g_dev = *device; HookDevice(*device); }
@@ -2836,6 +3441,6 @@ extern "C" HRESULT WINAPI D3D11CreateDeviceAndSwapChain(
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 {
-    if (reason == DLL_PROCESS_ATTACH) { g_self = hModule; LoadConfig(); Log("[GP] proxy attached\n"); }
+    if (reason == DLL_PROCESS_ATTACH) g_self = hModule;   // no I/O under the loader lock
     return TRUE;
 }

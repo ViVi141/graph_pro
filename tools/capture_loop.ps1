@@ -10,7 +10,7 @@ public class Cap {
 }
 "@
 [void][Cap]::SetProcessDPIAware()
-$out = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\_live\frames'
+$out = '<REPO>\demo\_live\frames'
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 $p = Get-Process arma3_x64 -ErrorAction SilentlyContinue
 if (-not $p) { "no game"; exit }

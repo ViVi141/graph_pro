@@ -1,6 +1,6 @@
 
 import glob, os, re
-d = r"D:\SteamLibrary\steamapps\common\Arma 3\GP_cand"
+d = r"<ARMA3>\GP_cand"
 files = glob.glob(os.path.join(d, "small_*.txt"))
 print("files", len(files))
 for f in sorted(files):

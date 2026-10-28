@@ -1,5 +1,5 @@
 import re
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 data = open(EXE, "rb").read()
 names = re.findall(rb"\.\?A[VU][A-Za-z0-9_@?$<>.-]{3,120}@@", data)
 print("RTTI type descriptors found:", len(names))

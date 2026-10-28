@@ -96,14 +96,28 @@ float4 main(PSIn i) : SV_Target
     // float compare — stale/unwritten cbuffer memory cannot hit 1.0 by accident.
     // Higher adapt == more highlight pressure, so back the exposure off and
     // soften the curve instead of letting channels clip.
+    //
+    // Defaults are the shipped tune. The proxy can override all four live from
+    // GP_agx.txt (E K S shoulder) via c[82]/c[83]; the sentinel is exact-compare
+    // so an unwritten buffer can never be mistaken for a tune.
     float E = 0.55f;
     float K = 1.40f;
     float S = 1.20f;
+    // Shoulder is OFF by default: it maps 1.0 to ~0.94, which visibly dulls a
+    // blown sky. Enable it from GP_agx.txt only if you want highlight headroom
+    // more than peak white.
+    float shoulder = 0.0f;
+    if (c[82].w == 1.0f) {
+        E = max(c[82].x, 0.05f);
+        K = max(c[82].y, 0.1f);
+        S = max(c[82].z, 0.0f);
+        shoulder = c[83].x;
+    }
     if (c[80].w == 1.0f) {
         float a = saturate(c[80].x);
-        E = lerp(0.55f, 0.42f, a);
-        K = lerp(1.40f, 1.25f, a);
-        S = lerp(1.20f, 1.10f, a);
+        E = lerp(E, E * 0.76f, a);
+        K = lerp(K, K * 0.89f, a);
+        S = lerp(S, S * 0.92f, a);
     }
 
     col = AgXToneMap(col * E);
@@ -112,6 +126,21 @@ float4 main(PSIn i) : SV_Target
     col = saturate((col - 0.5f) * K + 0.5f);
     float g = dot(col, float3(0.299f, 0.587f, 0.114f));
     col = saturate(lerp(float3(g, g, g), col, S));
+
+    // Soft shoulder: values above `shoulder` are compressed asymptotically to
+    // 1.0 instead of being hard-clipped by saturate(). Our own A/B table flagged
+    // 15.4% overexposed pixels, which is exactly what a hard clip looks like.
+    if (shoulder > 0.0f && shoulder < 0.99f) {
+        float3 t = max(col - shoulder, 0.0f) * 6.0f;
+        col = min(col, shoulder) + (1.0f - shoulder) * t / (1.0f + t);
+    }
+
+    // Interleaved-gradient dither, +/- half an 8-bit step. Removes the banding
+    // that 8-bit output shows in sky / fog / vignette gradients; invisible
+    // otherwise, and energy-preserving because it is unbiased.
+    float2 px = i.pos.xy;
+    float n = frac(52.9829189f * frac(dot(px, float2(0.06711056f, 0.00583715f))));
+    col += (n - 0.5f) / 255.0f;
 
     return float4(saturate(col), 1.0f);
 }

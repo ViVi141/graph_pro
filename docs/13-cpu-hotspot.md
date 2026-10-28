@@ -88,7 +88,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File dump_sample.ps1
 ### 标注（可选）
 
 ```powershell
-python tools\annotate_sample.py D:\SteamLibrary\steamapps\common\Arma 3\GP_sample_top.txt
+python tools\annotate_sample.py <ARMA3>\GP_sample_top.txt
 ```
 
 会把已知 RVA（如 `World::Simulate`）和粗粒度标签打到 stdout / `extract/cpu_samples/`。

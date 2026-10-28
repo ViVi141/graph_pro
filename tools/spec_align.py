@@ -1,5 +1,5 @@
 import numpy as np
-g = r"D:\SteamLibrary\steamapps\common\Arma 3"
+g = r"<ARMA3>"
 W, H = 1920, 1080
 a = np.fromfile(g + r"\GP_shot_1.rgb", dtype=np.uint8).reshape(H, W, 4)[:, :, :3].astype(np.float32)
 b = np.fromfile(g + r"\GP_shot_2.rgb", dtype=np.uint8).reshape(H, W, 4)[:, :, :3].astype(np.float32)

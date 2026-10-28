@@ -57,8 +57,13 @@ float4 main(PSIn i) : SV_Target
     if (!srcW || !srcH) { srcW = 852; srcH = 480; }
     float2 t = 1.0f / float2((float)srcW, (float)srcH);   // one source texel in UV
 
-    // Keep the original pass's full binding shape alive (see header).
-    float keepAlive = min(t1.SampleLevel(s1, i.uv, 0).r, 0.0f) + min(c[39].x, 0.0f);
+    // Keep the original pass's full binding shape alive without touching the
+    // result. This branch never fires for finite inputs, but the compiler cannot
+    // prove that, so t1/s1 and c[39] stay in the shader's resource layout.
+    // (The previous version added min(x, 0) to the output, which silently
+    // darkened the frame whenever either term was negative.)
+    float guard = t1.SampleLevel(s1, i.uv, 0).r + c[39].x;
+    if (guard > 1e20f || guard < -1e20f) discard;
 
     // Centre: hardware bilinear. This is the stable baseline.
     float3 ctr = t0.SampleLevel(s0, i.uv, 0).rgb;
@@ -92,5 +97,5 @@ float4 main(PSIn i) : SV_Target
     // white halos and no bright pixels popping in and out between frames.
     outc = clamp(outc, mn, mx);
 
-    return float4(saturate(outc + keepAlive), 1.0f);
+    return float4(saturate(outc), 1.0f);
 }

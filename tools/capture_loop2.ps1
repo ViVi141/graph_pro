@@ -1,4 +1,4 @@
-param([int]$Seconds = 900, [int]$Interval = 3, [string]$Out = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\_live\run2')
+param([int]$Seconds = 900, [int]$Interval = 3, [string]$Out = '<REPO>\demo\_live\run2')
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System;

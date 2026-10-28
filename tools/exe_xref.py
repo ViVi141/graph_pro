@@ -1,5 +1,5 @@
 import struct, re, numpy as np
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 data = open(EXE, "rb").read()
 e = struct.unpack_from("<I", data, 0x3C)[0]; coff = e + 4
 nsec = struct.unpack_from("<H", data, coff + 2)[0]; opt = coff + 20

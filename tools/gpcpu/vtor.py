@@ -2,7 +2,7 @@ import os
 import sys, struct
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pe
-SRV = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3server_x64.exe"
+SRV = r"<ARMA3>\arma3server_x64.exe"
 b = pe.Bin(SRV)
 IB = b.base
 data = b.pe.__data__

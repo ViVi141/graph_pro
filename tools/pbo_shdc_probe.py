@@ -1,8 +1,8 @@
 
 import struct, os, collections
 
-PBO = r"D:\SteamLibrary\steamapps\common\Arma 3\Dta\bin.pbo"
-OUT = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shdc"
+PBO = r"<ARMA3>\Dta\bin.pbo"
+OUT = r"<REPO>\extract\shdc"
 os.makedirs(OUT, exist_ok=True)
 data = open(PBO,'rb').read()
 

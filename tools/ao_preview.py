@@ -1,8 +1,8 @@
 import sys, numpy as np
 from PIL import Image
 
-GAME = r"D:\SteamLibrary\steamapps\common\Arma 3"
-OUT = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo"
+GAME = r"<ARMA3>"
+OUT = r"<REPO>\demo"
 W, H = 1920, 1080
 NEAR = 0.1
 

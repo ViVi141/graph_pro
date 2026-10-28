@@ -1,5 +1,5 @@
 import re, collections, os
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 data = open(EXE, "rb").read()
 names = sorted(set(m.group(0).decode("latin-1") for m in
                    re.finditer(rb"\.\?A[VU][A-Za-z0-9_@?$<>.-]{3,200}@@", data)))
@@ -28,7 +28,7 @@ rows.sort(reverse=True)
 for n, scope, fns in rows[:20]:
     print("  %-34s %3d  %s" % (scope, n, ", ".join(fns[:6])))
 
-out = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\engine_methods.txt"
+out = r"<REPO>\extract\engine_methods.txt"
 os.makedirs(os.path.dirname(out), exist_ok=True)
 with open(out, "w", encoding="utf-8") as f:
     for n, scope, fns in rows:

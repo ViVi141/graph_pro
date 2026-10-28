@@ -1,7 +1,7 @@
 
 from PIL import Image, ImageDraw, ImageFont
 import os
-src = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\before3\gp_r_baseline.png"
+src = r"<REPO>\demo\before3\gp_r_baseline.png"
 im = Image.open(src).convert("RGB")
 W,H = im.size
 print("size", W, H)
@@ -25,5 +25,5 @@ for i,(name,t) in enumerate(tiles):
     x = 20 + (i%cols)*(tw+20); y = 20 + (i//cols)*(th+30+20)
     sheet.paste(t,(x,y+30))
     ImageDraw.Draw(sheet).text((x+2,y+4), name, font=font, fill=(240,240,240))
-out = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\analysis-crops.png"
+out = r"<REPO>\demo\analysis-crops.png"
 sheet.save(out); print(out, sheet.size)

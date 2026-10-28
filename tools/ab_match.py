@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image, ImageDraw
 from numpy.lib.stride_tricks import sliding_window_view
-D = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo"
+D = r"<REPO>\demo"
 sets = [("VANILLA", "ab-match-baseline.png"),
         ("VANILLA+CC(match)", "ab-cc-match.png"),
         ("OURS(injection)", "ab-injected-baseline.png")]

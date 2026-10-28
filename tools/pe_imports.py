@@ -1,6 +1,6 @@
 
 import struct
-p = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3_x64.exe"
+p = r"<ARMA3>\arma3_x64.exe"
 d = open(p,'rb').read()
 e_lfanew = struct.unpack_from('<I', d, 0x3C)[0]
 assert d[e_lfanew:e_lfanew+4] == b'PE\x00\x00'

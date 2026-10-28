@@ -14,7 +14,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File mission\deploy-min.ps1
 ## 运行 A：基线（不带 mod）
 
 1. 先正常启动 **Steam** 并保持登录
-2. 双击 `mod\run-vanilla.bat`
+2. **你自己**启动 Arma 3（仓库不再提供启动脚本）
 3. PLAY → SCENARIOS → **GP Min**
 4. 场景出现后等约 **12 秒**，Esc → Abort
 
@@ -23,7 +23,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File mission\deploy-min.ps1
 ## 运行 B：带 mod
 
 1. 保持 Steam 运行
-2. 双击 `mod\run-gpmat.bat`
+2. **你自己**用 `-mod=@gpmat` 启动（Steam 启动项里加，或在启动器里勾选 `mod\@gpmat`）
+   —— PBO 不入库，先按 [mod/README.md](../mod/README.md) 自己打包。
 3. 同样进 **GP Min**，等约 12 秒，Esc
 
 产物：`Documents\Arma 3\Screenshots\gp_mat_mod.png`

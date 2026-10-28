@@ -2,7 +2,7 @@ import bisect
 import numpy as np
 import pefile
 
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 
 class Bin:
     def __init__(self, path=EXE):

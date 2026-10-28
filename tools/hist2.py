@@ -1,8 +1,8 @@
 
 from PIL import Image
 import numpy as np
-for tag,p in [("v5 tonemap", r"C:\Users\74738\Documents\Arma 3\Screenshots\gp_r_baseline.png"),
-              ("before",     r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\_live\maxed.png")]:
+for tag,p in [("v5 tonemap", r"<ARMA3_DOCS>\Screenshots\gp_r_baseline.png"),
+              ("before",     r"<REPO>\demo\_live\maxed.png")]:
     im = Image.open(p).convert("RGB")
     a = np.asarray(im).astype(np.float32)/255
     l = 0.2126*a[...,0]+0.7152*a[...,1]+0.0722*a[...,2]

@@ -1,5 +1,5 @@
 import struct, os, re, collections
-ADDONS = r"D:\SteamLibrary\steamapps\common\Arma 3\addons"
+ADDONS = r"<ARMA3>\addons"
 
 def lzss_decompress(data, expected):
     out = bytearray()

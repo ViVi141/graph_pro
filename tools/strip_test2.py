@@ -13,7 +13,7 @@ def blob_bytes(p):
     size = FNSIZE(vt[4])(p)
     return ctypes.string_at(ptr, size)
 
-for p in [r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\dxbc_mat\PSNormalMapMacroASSpecularMap.dxbc"]:
+for p in [r"<REPO>\extract\dxbc_mat\PSNormalMapMacroASSpecularMap.dxbc"]:
     data = open(p,'rb').read()
     print(os.path.basename(p), "orig", len(data), "%08X" % (zlib.crc32(data)&0xffffffff))
     for flags in [0,1,2,3,4,7]:

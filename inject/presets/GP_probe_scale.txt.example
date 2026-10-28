@@ -4,6 +4,9 @@ What it does
 ------------
 Watches every fullscreen draw (vertexCount 3/4/6) and records any whose
 **input SRV is smaller than its output RTV** — that signature is an upscale pass.
+It also reads back **one** of those passes (the one that reads the internal
+render size or writes the back buffer) and reports the **colour space** of its
+input, because that decides whether FSR1's EASU can be used as-is.
 
 It changes nothing (pure observation), so it is safe to leave on while playing.
 
@@ -15,12 +18,16 @@ so we need to know:
   1. does a single PS pass do the stretch?
   2. what is its shader (size + crc) so GP_replace.txt can target it?
   3. is the input really a lower-resolution SRV?
+  4. is that input already display-referred [0,1], or still HDR scene-linear?
+     (EASU requires the former; if it is HDR you must tonemap first.)
 
 How to use
 ----------
 1. Copy this file to the game directory as `GP_probe_scale.txt`.
-   IMPORTANT: enable the probe BEFORE launching the game. Shader recording is
-   gated on this file, so shaders created before it exists are unknown (psLen=0).
+   The probe is read at startup and re-read every 60 frames, so the file may also
+   be dropped in mid-session. Shader recording is NOT gated on this file (that
+   was an older build): every pixel shader created after the proxy loads is
+   recorded.
 2. In game, set Sampling (分辨率采样) to 70% or 50% — otherwise the input and
    output are the same size and nothing will match.
 3. Play a few seconds. The proxy rewrites `GP_upscale.txt` every 300 frames.
@@ -33,17 +40,67 @@ Reading the report
 ------------------
   fullscreen_draws           total fullscreen quads seen
   upscale_candidates_hits    draws whose input < output
-  input(SRV) -> output(RTV)  e.g. 1344x756 -> 1920x1080  <-- this is the pass
+  distinct=N/128             candidate table occupancy (128 slots; see below)
+  prio                       priority: 2 = reads the internal render size or
+                             writes the back buffer. **The pass you want is the
+                             prio-2 row whose output is the back buffer.**
+  input(SRV) -> output(RTV)  e.g. 1344x756 -> 1920x1080  <-- candidate
   psLen / psCrc              the pixel shader, ready for GP_replace.txt
+  via                        Draw / CopyResource / CopySubresourceRegion / Resolve
+
+The table used to be 32 slots, first-come-first-served, and high-frequency UI or
+debug passes (e.g. `64x768 -> 1920x1080`, ~95k hits) filled it before the real
+stretch (once per frame) could get a slot. It is now 128 slots and evicts the
+least interesting entry, so prio-2 rows survive.
+
+Colour-space readback
+---------------------
+For the prio-2 pass the proxy copies the captured input to a staging texture and
+logs one line like:
+
+    [GP] upscale input 00000000 1600x900 fmt=10: min=(0.0100 ...) max=(12.5 ...)
+         mean=(0.21 ...) >1=3.4% >4=0.2% n=36864
+    [GP] upscale input verdict: HDR / scene-linear -> tonemap before EASU
+
+`fmt=10` is R16G16B16A16_FLOAT. The verdict is "HDR" when any sample exceeds 4.0
+or the max exceeds 1.5; otherwise the input is display-referred and EASU can be
+dropped in. The readback happens once per (psCrc, size), never per frame.
+
+Whole-frame capture: one launch, everything
+-------------------------------------------
+After ~240 settled frames the probe writes, once per session:
+
+  GP_passseq.txt   every fullscreen pass of ONE frame, in execution order:
+                   idx psCrc psLen in(SRV) out(RTV) fmt src sfmt min..max mean/>1%
+                   "src" is the texture that pass sampled, and min..max/mean/>1%
+                   are measured on it — i.e. the colour range of every stage.
+  GP_shaders.txt   every pixel shader the game created (crc, bytes, cached bytes)
+  GP_upscale.txt   all candidate signatures for the session (prio, hits)
+
+The dump is two-phase: the first frame containing "smaller input -> back buffer"
+arms it, the next one is captured with the per-pass statistics.
+
+Then turn the bundle into a report:
+
+    python tools\analyze_capture.py "D:\...\Arma 3"
+
+It prints (and can write) the pass chain, marks the final stretch, reports each
+stage's colour space, and lists which shaders are replaceable.
+
+To also save a texture (≈12 MB at 1600x900 RGBA16F), create
+`GP_upscale_dump_input.txt` before the draw; it lands next to the exe as
+`GP_up_in_<crc>_<w>x<h>.raw` (packed rows, 4 bpp for 8-bit, 8 bpp for RGBA16F).
+Delete the trigger when you are done, or every session adds another file.
 
 If psCrc is non-zero, the report also prints a ready-to-paste GP_replace.txt
 line in GP_shader.log. The first field is the ORIGINAL shader size as the game
-passed it (use psLen from the report for that field).
+passed it (use psLen from the report for that field). Note that psLen changes
+with the render resolution — a table entry sampled at 1600x900 will not match
+after you change Sampling.
 
 If psLen is 0 for a candidate:
-  - the probe was enabled after that shader was created -> restart the game
-    with GP_probe_scale.txt already in place, or
-  - the shader came from a device/context we do not hook.
+  - the shader came from a device/context we do not hook, or the table was
+    reset after 8192 distinct shaders (see the proxy log).
   The row is still a real upscale candidate by geometry; psKey identifies it.
 
 If the report says "No fullscreen pass with input < output was seen":

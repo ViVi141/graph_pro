@@ -1,5 +1,5 @@
 import struct, os
-ADDONS = r"D:\SteamLibrary\steamapps\common\Arma 3\addons"
+ADDONS = r"<ARMA3>\addons"
 def lzss(data, expected):
     out = bytearray(); i = 0
     while i < len(data) and len(out) < expected:

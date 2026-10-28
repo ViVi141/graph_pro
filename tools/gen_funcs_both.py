@@ -1,9 +1,9 @@
 import struct, os
 for EXE, OUT in [
-    (r"D:\SteamLibrary\steamapps\common\Arma 3\arma3_x64.exe",
-     r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\funcs_client.bin"),
-    (r"D:\SteamLibrary\steamapps\common\Arma 3\arma3server_x64.exe",
-     r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\funcs_server.bin"),
+    (r"<ARMA3>\arma3_x64.exe",
+     r"<REPO>\inject\counter\funcs_client.bin"),
+    (r"<ARMA3>\arma3server_x64.exe",
+     r"<REPO>\inject\counter\funcs_server.bin"),
 ]:
     data = open(EXE, "rb").read()
     e = struct.unpack_from("<I", data, 0x3C)[0]; coff = e + 4
@@ -27,6 +27,6 @@ for EXE, OUT in [
         for b, e2 in pairs: f.write(struct.pack("<II", b, e2))
     print(os.path.basename(EXE), "->", os.path.basename(OUT), len(pairs), "funcs", os.path.getsize(OUT), "bytes")
 import shutil
-shutil.copyfile(r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\funcs_client.bin",
-                r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\funcs.bin")
+shutil.copyfile(r"<REPO>\inject\counter\funcs_client.bin",
+                r"<REPO>\inject\counter\funcs.bin")
 print("funcs.bin now = client table")

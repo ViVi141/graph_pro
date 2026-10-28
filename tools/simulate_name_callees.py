@@ -10,7 +10,7 @@ from collections import defaultdict
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 from capstone.x86 import X86_OP_IMM, X86_OP_MEM, X86_REG_RIP
 
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "extract", "cpu_samples", "simulate_callee_names.txt")
 

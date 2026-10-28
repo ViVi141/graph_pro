@@ -1,4 +1,4 @@
-# named from C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\cpu_samples\top_ai48_20261024_025042.txt
+# named from <REPO>\extract\cpu_samples\top_ai48_20261024_025042.txt
 # exe=arma3server_x64.exe imagebase=0x140000000
 # hits pct_exe rva size owner tag strings
    60  10.526%  0x0140D288    785  owner=0x0140D288..0140D599  unlabeled  :: -

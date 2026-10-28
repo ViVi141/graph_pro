@@ -8,7 +8,7 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 KNOWN = os.path.join(ROOT, "extract", "cpu_samples", "known_rva.txt")
 OUT = os.path.join(ROOT, "extract", "cpu_samples", "c1_yaab_annotated.txt")
 
@@ -94,7 +94,7 @@ def tag(rva: int, size: int, known: dict[int, str]) -> str:
 
 def main() -> int:
     src = sys.argv[1] if len(sys.argv) > 1 else (
-        r"D:\SteamLibrary\steamapps\common\Arma 3\GP_sample_top.txt"
+        r"<ARMA3>\GP_sample_top.txt"
     )
     if not os.path.isfile(src):
         print("missing", src)

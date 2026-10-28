@@ -1,6 +1,6 @@
 # Deploy CPU sampler only (no d3d11 proxy).
 param(
-  [string]$Game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+  [string]$Game = $env:ARMA3_DIR
 )
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $Game)) {

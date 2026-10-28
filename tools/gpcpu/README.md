@@ -55,10 +55,11 @@
 ## 注意
 
 - **仅限单人/编辑器**，不要在有 BattlEye 的联机里用。
+- 运行前设置 `$env:ARMA3_DIR`；脚本通过 `_paths.ps1` 取仓库路径，工作目录默认
+  `_local\gp_re`（可用 `$env:GP_WORK` 覆盖）。DLL 需自己编译，不入库。
 - 采样靠挂起线程，会带来 10–30% 开销；采样期间不要做性能对比。
 - `funcs.bin` 必须与目标二进制一致（客户端 `funcs_client.bin` / 服务器 `funcs_server.bin`）。
 - 客户端 `MainThrd` 桶为空是正常的：客户端主线程名是 `rvMain`。
-- `.ps1` 里含本机绝对路径（仓库、游戏目录、profiles），换机器需要改。
 - `gpmeasure` 会改写游戏代码序言，重启游戏即恢复。
 - `GP_watch.names.example` 是 2.22 客户端的 RVA→名字表，`docs/20` 的结论靠它才可读；
   复制为 `GP_watch.names` 放进游戏目录即可（**必须**与目标版本一致，A3 更新后 RVA 会变）。

@@ -3,7 +3,7 @@
 ## 环境
 
 - RenderDoc 1.46：`C:\Program Files\RenderDoc\qrenderdoc.exe`
-- 游戏：`D:\SteamLibrary\steamapps\common\Arma 3`
+- 游戏：`<ARMA3>`
 - **必须先移走代理**：把游戏目录下的 `d3d11.dll` 改名为 `d3d11.dll.gp_off`（否则与 RenderDoc 抢 hook）
 
 ## 步骤（优先：先正常进游戏再注入）

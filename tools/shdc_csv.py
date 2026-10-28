@@ -1,7 +1,7 @@
 
 import re, os, csv
-d = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shdc"
-out = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shader-inventory.csv"
+d = r"<REPO>\extract\shdc"
+out = r"<REPO>\extract\shader-inventory.csv"
 pat = re.compile(rb'([A-Za-z][A-Za-z0-9_]{2,40})\x00((?:ps|vs|gs|cs)_[45]_[01])\x00([0-9A-F]{8})\x00')
 rows=[]
 for fn in sorted(os.listdir(d)):

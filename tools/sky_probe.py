@@ -1,5 +1,5 @@
 import numpy as np
-GAME = r"D:\SteamLibrary\steamapps\common\Arma 3"
+GAME = r"<ARMA3>"
 W,H = 1920,1080
 d = (np.fromfile(GAME+r"\GP_depth_600.raw",dtype=np.uint32).reshape(H,W)&0xFFFFFF).astype(np.float32)/16777216.0
 c = np.fromfile(GAME+r"\GP_color_600.raw",dtype=np.uint8).reshape(H,W,4)

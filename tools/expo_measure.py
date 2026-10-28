@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image
-A = r"C:\Users\74738\.dsh\attachments\v1\objects\cf\cf05fe264a6ab3e8740603c5165f0f8c8194cd095bc64bea9ed2d338572c1220"  # expo hi=1.10
-B = r"C:\Users\74738\.dsh\attachments\v1\objects\8c\8c132e7eb402527ae5c3a05ecdbcd398ae13b47979507c33093f0c2aff303a85"  # expo hi=0.30
+A = r"<USERPROFILE>\.dsh\attachments\v1\objects\cf\cf05fe264a6ab3e8740603c5165f0f8c8194cd095bc64bea9ed2d338572c1220"  # expo hi=1.10
+B = r"<USERPROFILE>\.dsh\attachments\v1\objects\8c\8c132e7eb402527ae5c3a05ecdbcd398ae13b47979507c33093f0c2aff303a85"  # expo hi=0.30
 def lum(img): return 0.2126*img[:,:,0]+0.7152*img[:,:,1]+0.0722*img[:,:,2]
 for name, p in [("hi=1.10", A), ("hi=0.30", B)]:
     im = np.asarray(Image.open(p).convert("RGB")).astype(np.float32)/255.0

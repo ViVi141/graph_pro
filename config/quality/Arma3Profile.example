@@ -59,11 +59,11 @@ wBrowserSP=0;
 class wBrowserMP
 {
 };
-anisoFilter=4;
-textureQuality=1;
-shadowQuality=3;
+anisoFilter=16;
+textureQuality=4;
+shadowQuality=5;
 tripleHead=0;
-lastMPMission="dlfc";
+lastMPMission="";
 class MainMap
 {
 	class Compass
@@ -73,15 +73,15 @@ class MainMap
 		positionBack[]={0.0055000023,2.2351743e-09,0.1};
 	};
 };
-lastSPMission="Yet Another Arma Benchmark";
+lastSPMission="";
 headBob=1;
 floatingZoneArea=0;
-sceneComplexity=600000;
+sceneComplexity=1800000;
 shadowZDistance=200;
-viewDistance=1600.0001;
-preferredObjectViewDistance=1300.0002;
-pipViewDistance=800;
-terrainGrid=25;
+viewDistance=3800;
+preferredObjectViewDistance=3000;
+pipViewDistance=2500;
+terrainGrid=3.125;
 volumeCD=0;
 volumeFX=0;
 volumeSpeech=0;

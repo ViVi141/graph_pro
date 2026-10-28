@@ -7,7 +7,8 @@ param(
 # Headless soft-lever A/B via gpsample exe_fn (NOT diag_fps).
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+$game = $env:ARMA3_DIR
+if (-not $game) { throw 'Set ARMA3_DIR to the Arma 3 install directory.' }
 $serverExe = Join-Path $game 'arma3server_x64.exe'
 $counter = Join-Path $repo 'inject\counter'
 $missionSrc = Join-Path $repo 'mission\GP_ServerTest.Altis'
@@ -136,7 +137,7 @@ Copy-Item (Join-Path $counter 'funcs_server.bin') (Join-Path $counter 'funcs.bin
 Set-Content (Join-Path $counter 'GP_sample.txt') -Value '50 30 1' -Encoding Ascii -NoNewline
 powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $counter 'deploy_sample.ps1') -Game $game | Out-Null
 
-Get-Process arma3server_x64, arma3_x64 -EA SilentlyContinue | Stop-Process -Force
+Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 
 $srvArgs = @(

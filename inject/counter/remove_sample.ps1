@@ -1,6 +1,6 @@
 # Remove CPU sampler files from the game directory.
 param(
-  [string]$Game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+  [string]$Game = $env:ARMA3_DIR
 )
 $ErrorActionPreference = 'Continue'
 $names = @(

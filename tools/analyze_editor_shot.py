@@ -1,7 +1,7 @@
 
 from PIL import Image
 import numpy as np
-p = r"C:\Users\74738\.dsh\attachments\v1\objects\6a\6a7fb4f0b30eefca60dc4dfb2f0047bda42194a78b36d82c0fb5ed18ecca1683"
+p = r"<USERPROFILE>\.dsh\attachments\v1\objects\6a\6a7fb4f0b30eefca60dc4dfb2f0047bda42194a78b36d82c0fb5ed18ecca1683"
 im = Image.open(p).convert("RGB")
 a = np.asarray(im).astype(np.float32)/255
 print("size", im.size)

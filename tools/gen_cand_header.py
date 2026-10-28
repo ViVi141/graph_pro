@@ -1,7 +1,7 @@
 import struct, json
 from capstone import *
 from capstone.x86 import *
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE = r"<ARMA3>\Arma3_x64.exe"
 data = open(EXE, "rb").read()
 e = struct.unpack_from("<I", data, 0x3C)[0]; coff = e + 4
 nsec = struct.unpack_from("<H", data, coff + 2)[0]; opt = coff + 20
@@ -23,7 +23,7 @@ for i in range(0, prs, 12):
     b, e2, u = struct.unpack_from("<III", data, pra + i)
     if b: fmap[b] = e2
 md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
-cands = json.load(open(r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\candidates.json"))
+cands = json.load(open(r"<REPO>\extract\candidates.json"))
 safe = []
 for c in cands:
     rva, size = c["rva"], c["size"]
@@ -47,6 +47,6 @@ for c in safe:
     lines.append("    { 0x%08X, %d, 0 },   // size %d, simd %d" % (c["rva"], c["copy_len"], c["size"], c["simd"]))
 lines.append("};")
 lines.append("static const int g_nCand = sizeof(g_cands)/sizeof(g_cands[0]);")
-path = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\proxy\cand_hooks.h"
+path = r"<REPO>\inject\proxy\cand_hooks.h"
 open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
 print("wrote", path, "entries", len(safe))

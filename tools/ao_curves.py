@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image
-GAME = r"D:\SteamLibrary\steamapps\common\Arma 3"
-OUT = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo"
+GAME = r"<ARMA3>"
+OUT = r"<REPO>\demo"
 W,H = 1920,1080
 d = (np.fromfile(GAME+r"\GP_depth_1200.raw",dtype=np.uint32).reshape(H,W)&0xFFFFFF).astype(np.float32)/16777216.0
 c = np.fromfile(GAME+r"\GP_color_1200.raw",dtype=np.uint8).reshape(H,W,4)[:,:,:3].astype(np.float32)/255.0
@@ -35,7 +35,7 @@ for a in range(dirs):
         best=np.maximum(best,np.where(ok,np.clip(cosA,0,1)*(1.0-t),0))
     total+=best
 ao=np.where(active,np.clip(1.0-total/dirs,0,1),1.0)
-np.save(r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\ao1200.npy",ao)
+np.save(r"<REPO>\demo\ao1200.npy",ao)
 
 def box(a,r):
     k=np.ones((2*r+1,2*r+1),np.float32); k/=k.sum()

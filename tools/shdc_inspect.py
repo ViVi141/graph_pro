@@ -1,6 +1,6 @@
 
 import struct, os, re, collections
-p = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shdc\Shaders_5_0_PP.shdc"
+p = r"<REPO>\extract\shdc\Shaders_5_0_PP.shdc"
 b = open(p,'rb').read()
 print("size", len(b))
 print("head 160:", b[:160].hex(' '))

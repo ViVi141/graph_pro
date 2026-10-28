@@ -180,12 +180,12 @@ def main() -> None:
   ap.add_argument(
       "indir",
       nargs="?",
-      default=r"D:\SteamLibrary\steamapps\common\Arma 3",
+      default=r"<ARMA3>",
       help="directory with GP_mrt_census.txt / GP_depth_timeline.txt / raw dumps",
   )
   ap.add_argument(
       "--demo",
-      default=r"c:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo",
+      default=r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo",
       help="output demo dir",
   )
   args = ap.parse_args()

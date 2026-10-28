@@ -1,4 +1,4 @@
-# source D:\SteamLibrary\steamapps\common\Arma 3\GP_sample_top.txt
+# source <ARMA3>\GP_sample_top.txt
 # samples=2472 misses=131966 exe_hit_rate=1.84%
 # hits  pct     rva         size   tag
    45    1.82%  0x01A249F0   1645  Simulate_callee_16way_dispatch  peek_calls~0 [mov,lea,cmp,ja,nop]

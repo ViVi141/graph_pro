@@ -200,6 +200,12 @@
 
 ## 2026-10-23 屏幕空间旁路 v1（E0 / E1 / E2）
 
+> ⚠️ **历史快照，不是当前出货状态。** 本节里的 `GP_present.txt = 0 0.45 1.20 600 0.30`、
+> `GP_expo.txt = 1696 0 1.10`、`GP_light.txt = 0.35 -0.75 0 8` 都已被后续裁决覆盖：
+> 接触阴影于 2026-10-24 搁置（`kContactShelved`，永久强制 mode 2），曝光现值是
+> `1696 0 1.35`（且 99.9% 的帧是空操作），光向现值 `0.35 -0.75 0.0 10`。
+> 以 `inject/presets/` 为准。
+
 锁定目标（docs/12）：**深度接触阴影 + 曝光钳制 + ACES / 环境光**。
 
 ### E0 · 曝光钳制验收
@@ -222,7 +228,7 @@
 | debug | mode **4** = `GP_present_contact.txt`（红遮挡） |
 | 出货 | mode **0** · `GP_present.txt` = `0 0.45 1.20 600 0.30` |
 | 关闭 | `GP_present_off.txt` → 复制为 `GP_present.txt` |
-| 离线 A/B | `demo/ab-contact-off-vs-on.png`、`demo/ab-contact-debug.png`、`demo/contact-shadow-smoke.png`（mean_occ≈0.49） |
+| 离线 A/B | `demo/ab-contact-off-vs-on.png`、`demo/ab-contact-debug.png`、`demo/contact-shadow-smoke.png`（原记 mean_occ≈0.49；**2026-10-28 复核不可复现，实测 0.023**，见 docs/12） |
 | 光向 | `GP_light.txt` = `0.35 -0.75 0 8`（手调） |
 
 ### E2 · 打包
@@ -268,8 +274,8 @@
 |---|---|---|
 | 软笔触 | 双半径（0.4× / 1.0×）加权累加，steps 默认 10 | ✅ HLSL + 离线 smoke |
 | SSAO 明度保护 | `protect=(luma-luma0)/(luma1-luma0)`，暗像素少叠暗 | ✅ 默认 0.05 / 0.18 |
-| 时域滤波 | RG16F ping-pong（occ, depth）；`|Δd|>eps` 则不用历史 | ✅ 代理 MRT |
-| 默认 mode | 仍 **2**；试验复制 `GP_present_on.txt` | 待引擎 A/B 后改 mode 0 |
+| 时域滤波 | ~~RG16F ping-pong（occ, depth）~~ | ❌ **2026-10-28 已删除**：合成 shader 是单 RT，历史纹理从未被采样 |
+| 默认 mode | 仍 **2**；`GP_present_on.txt` **无效**（`kContactShelved` 强制 2） | 已结案，无"改 mode 0"路径 |
 
 离线：`python tools/contact_shadow_smoke.py` → `demo/contact-shadow-smoke.png`（五联：原色 / 遮挡 / 红 / 有保护 / 无保护）。
 
@@ -354,13 +360,13 @@ Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天�
 
 | 项 | 内容 |
 |---|---|
-| 日志泛滥 | `expo hit` 的 `%400` 无条件心跳 → 只在指纹判决变化时打印；`Log()` 加 10 万行上限 + 批量 flush（原来每行都 `fflush`，在渲染线程上） |
+| 日志泛滥 | `expo hit` 的 `%400` 无条件心跳 → 改成"前 4 次 + 每 10 万次一条"的稀疏心跳，指纹拒绝单独限流；`Log()` 加 10 万行上限 + 批量 flush（原来每行都 `fflush`，在渲染线程上） |
 | 自适应默认态 | `g_adaptOn = 0`；关闭时**跳过**每 15 帧的全幅 `CopyResource` + STAGING 回读 |
 | `c[80]` 接线 | 代理写哨兵 `c[80].w = 1.0`，AgX shader 仅在精确等于 1.0 时插值 E/K/S；关闭时写 0 |
 | 224 B 材质 CB | 加非有限值/发散值防护 + 前三批 `amb`/`ae`/`diffuse` 诊断日志（原为裸 size 匹配） |
-| `Hook_Map` | 加 ByteWidth 缓存，消除每次 Map 的 `QueryInterface` + `GetDesc`（渲染线程已知热点） |
+| `Hook_Map` | **未做缓存**（2026-10-28 复核更正）：每次 Map 仍 `QueryInterface` + `GetDesc`。同年晚些修正的是并发安全——`g_maps` / 着色器表改为 `SRWLOCK` 保护 |
 | `GP_light.txt` 缺失 | 现在会清 `g_lightAuto`（原来保留旧自动光向，与 expo 的修法不对称） |
-| 构建链路 | 新增 `tools/build_tonemap.ps1`；**实测定出唯一正确参数 `ps_4_0` 无 `/O3`**，逐位复现 `GP_ssao.dxbc`(5A2370A56BA8) 与 `GP_tonemap.dxbc`(8BD7FDE4571B) |
+| 构建链路 | 新增 `tools/build_tonemap.ps1`；**实测定出唯一正确参数 `ps_4_0` 无 `/O3`**，逐位复现 `GP_ssao.dxbc`(5A2370A56BA8) / `GP_tonemap.dxbc`(8BD7FDE4571B)（2026-10-28 重跑确认）。`GP_tonemap_agx.dxbc` 随成像改动变，不作锚点 |
 | 冗余载荷 | 删除 `tonemap_aces.dxbc` / `ssao_final.dxbc` / `tonemap_agx.dxbc` / `tonemap_agx_neutral.dxbc`（inject 根下）与孤儿 `e040`/`e070` |
 | `.gitignore` | 补 `demo/**/*.dll*` 与 `demo/**/*.dxbc`，并把已跟踪的 `d3d11.dll.gp_off` 移出索引 |
 
@@ -397,7 +403,7 @@ Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天�
 | 事实 | 数据 |
 |---|---|
 | 采样率减半 | FPS 65 → 69，**仅 +6%** |
-| 核显驱动占活跃样本 | **~2%** |
+| 核显驱动占全样本 | **0.68%**（去等待后 ~23%；此前误写"活跃样本 2%"） |
 | 结论 | 超分在此机器是**画质**工具，不是**帧率**工具 |
 
 ### 附带查清的诱因（避免重复误判）

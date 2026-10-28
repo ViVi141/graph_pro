@@ -1,8 +1,8 @@
 
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
-after = r"C:\Users\74738\Documents\Arma 3\Screenshots\gp_r_baseline.png"
-before = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\_live\maxed.png"
+after = r"<ARMA3_DOCS>\Screenshots\gp_r_baseline.png"
+before = r"<REPO>\demo\_live\maxed.png"
 a = Image.open(after).convert("RGB")
 b = Image.open(before).convert("RGB").resize(a.size, Image.LANCZOS)
 d = np.abs(np.asarray(a,np.float32)-np.asarray(b,np.float32))
@@ -18,5 +18,5 @@ for i,(name,cx,cy,half) in enumerate(regions):
         x=20+j*(tw+20); y=10+i*(th+30)
         sheet.paste(c,(x,y+30))
         dr.text((x+2,y+4), f"{name} {'原样' if j==0 else 'smoothstep'}", font=font, fill=(235,235,240))
-out=r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\ssao-smoothstep.png"
+out=r"<REPO>\demo\ssao-smoothstep.png"
 sheet.save(out); print(out, sheet.size)

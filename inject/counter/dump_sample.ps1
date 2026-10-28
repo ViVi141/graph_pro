@@ -1,6 +1,6 @@
 # Trigger an immediate sample dump.
 param(
-  [string]$Game = 'D:\SteamLibrary\steamapps\common\Arma 3',
+  [string]$Game = $env:ARMA3_DIR,
   [string]$OutDir = ''
 )
 $ErrorActionPreference = 'Stop'

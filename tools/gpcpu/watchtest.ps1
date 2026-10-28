@@ -1,12 +1,12 @@
 param([int]$N = 160, [int]$Sec = 20)
 $ErrorActionPreference = 'Stop'
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+. (Join-Path $PSScriptRoot '_paths.ps1')
 $exe = Join-Path $game 'arma3server_x64.exe'
 $prof = Join-Path $env:LOCALAPPDATA 'GP_arma_server'
-$cfg = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\server.cfg'
-$basic = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\basic.cfg'
+$cfg = (Join-Path $repo 'server\server.cfg')
+$basic = (Join-Path $repo 'server\basic.cfg')
 $m = Join-Path $game 'MPMissions\GP_ServerTest.Altis'
-$bak = 'C:\Users\74738\gp_re\initServer_watch_backup.sqf'
+$bak = (Join-Path $work 'initServer_watch_backup.sqf')
 $tpl = @'
 enableSaving [false, false];
 setDate [2035, 7, 12, 12, 0];
@@ -54,9 +54,9 @@ diag_log format ["[GP] spawn done units=%1 groups=%2", count allUnits, _nGroups]
 Copy-Item (Join-Path $m 'initServer.sqf') $bak -Force
 try {
   Set-Content -Path (Join-Path $m 'initServer.sqf') -Value ($tpl.Replace('__N__', [string]$N)) -Encoding UTF8
-  Copy-Item 'C:\Users\74738\gp_re\gpwatch.dll' $game -Force
-  Copy-Item 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\funcs_server.bin' (Join-Path $game 'funcs.bin') -Force
-  Copy-Item 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\injector.exe' $game -Force
+  Copy-Item (Join-Path $work 'gpwatch.dll') $game -Force
+  Copy-Item (Join-Path $repo 'inject\counter\funcs_server.bin') (Join-Path $game 'funcs.bin') -Force
+  Copy-Item (Join-Path $repo 'inject\counter\injector.exe') $game -Force
   Set-Content (Join-Path $game 'GP_watch.cfg') -Value ("2 " + $Sec + " 2") -Encoding Ascii -NoNewline
   Remove-Item (Join-Path $game 'GP_watch.log') -Force -EA SilentlyContinue
   Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
@@ -79,7 +79,7 @@ try {
   Get-Content (Join-Path $game 'GP_watch.log') -EA SilentlyContinue | Select-Object -First 6
   Write-Host '--- watch output (head) ---'
   Get-Content (Join-Path $game 'GP_watch.txt') -EA SilentlyContinue | Select-Object -First 60
-  Copy-Item (Join-Path $game 'GP_watch.txt') 'C:\Users\74738\gp_re\watch_ds_sample.txt' -Force -EA SilentlyContinue
+  Copy-Item (Join-Path $game 'GP_watch.txt') (Join-Path $work 'watch_ds_sample.txt') -Force -EA SilentlyContinue
 } finally {
   Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
   Start-Sleep -Seconds 2

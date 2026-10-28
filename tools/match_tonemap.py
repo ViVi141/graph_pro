@@ -1,8 +1,8 @@
 
 import re, os, glob, difflib
 
-REF = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\dxbc\tonemap.asm"
-CAND = r"D:\SteamLibrary\steamapps\common\Arma 3\GP_cand"
+REF = r"<REPO>\extract\dxbc\tonemap.asm"
+CAND = r"<ARMA3>\GP_cand"
 
 def mnemonics(path):
     out = []

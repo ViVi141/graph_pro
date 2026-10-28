@@ -9,10 +9,10 @@ def sharp(p):
     return float(lap.var())/1000
 import os
 paths = {
- "02:00 原版": r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\before\gp_r_baseline.png",
- "02:13 原版": r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\before2\gp_r_baseline.png",
- "02:27 原版": r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\before3\gp_r_baseline.png",
- "02:36 新设置": r"C:\Users\74738\Documents\Arma 3\Screenshots\gp_r_baseline.png",
+ "02:00 原版": r"<REPO>\demo\before\gp_r_baseline.png",
+ "02:13 原版": r"<REPO>\demo\before2\gp_r_baseline.png",
+ "02:27 原版": r"<REPO>\demo\before3\gp_r_baseline.png",
+ "02:36 新设置": r"<ARMA3_DOCS>\Screenshots\gp_r_baseline.png",
 }
 for k,p in paths.items():
     print(f"{k:14s} sharpness={sharp(p):.2f}  exists={os.path.exists(p)}")

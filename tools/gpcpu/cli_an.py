@@ -2,7 +2,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pe, capstone
-b = pe.Bin(r"D:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe")
+b = pe.Bin(r"<ARMA3>\Arma3_x64.exe")
 md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 md.detail = True
 TEXT = b.sections[0][1]

@@ -12,7 +12,7 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXE = r"D:\SteamLibrary\steamapps\common\Arma 3\arma3server_x64.exe"
+EXE = r"<ARMA3>\arma3server_x64.exe"
 DEFAULT_TOP = os.path.join(
     ROOT, "extract", "cpu_samples", "top_20261024_023135.txt"
 )

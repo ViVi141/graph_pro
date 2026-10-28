@@ -1,45 +1,75 @@
-# tools 说明
+# tools
 
-都是 Python / PowerShell 小工具，按用途分组。
+Two kinds of scripts live here:
 
-## 解包与反汇编
+- **maintained** — portable entry points used by the README / docs;
+- **lab notes** — one-off analysis scripts kept for reproducibility. Many still
+  contain `<ARMA3>` / `<REPO>` placeholders and expect files that were never
+  committed (extracted shaders, raw captures). They are *not* a polished CLI.
 
-| 文件 | 作用 |
+Set the game directory once:
+
+```powershell
+$env:ARMA3_DIR = "C:\Program Files (x86)\Steam\steamapps\common\Arma 3"
+```
+
+## Maintained
+
+| File | Purpose |
 |---|---|
-| pbo_shdc_probe.py | 解析 bin.pbo，导出 9 个 .shdc 着色器缓存 |
-| shdc_inventory.py / shdc_csv.py | 统计 shdc 里的命名条目，导出 CSV |
-| shdc_extract_dxbc.py | 按名字从 shdc 里抽出单个 DXBC |
-| match_tonemap.py | 把候选反汇编与参考 tonemap 做指令级相似度比对 |
+| `build_tonemap.ps1` | Compile `tonemap_agx/aces` + `ssao_final` + `fsr1` → `inject/presets/GP_*.dxbc`; auto-detects fxc. |
+| `build_present.ps1` | Compile the Present-pass entries → `inject/present/*.dxbc` + embedded header. Uses `/O3` (separate contract). |
+| `proxy_smoke_test.py` | Real D3D11 device, hidden window: config load → shader replace → Present ×2 → ResizeBuffers. No game. |
+| `probe_smoke_test.py` | Upscale probe: prio-2 record, half-float decode, HDR verdict, raw dump. No game. |
+| `analyze_capture.py` | Explain `GP_passseq.txt` / `GP_upscale.txt` / `GP_shaders.txt`; flags low-confidence captures. |
+| `estimate_mission_cpu.py` | SEU budget model (`config/cpu_catalog.json` + `docs/17` coefficients). |
+| `pe_imports.py` | PE import table (confirm the game's D3D11/DXGI surface). |
+| `rvmat_patch.py` / `pbo_rvmat_scan.py` | rvmat inspection/patching helpers for the material line. |
 
-反汇编用 Windows SDK 的 fxc：
-  fxc /dumpbin /nologo xxx.dxbc
+> `build_tonemap.ps1` is **ps_4_0 without /O3** so it reproduces the shipped
+> `GP_ssao.dxbc` (`5A2370A56BA8`) and `GP_tonemap.dxbc` (`8BD7FDE4571B`).
+> Changing the profile silently changes SSAO output. The Present payloads use
+> `ps_5_0 /O3`; that is a separate, documented contract.
 
-## shader 构建
+## Validation flow
 
-| 文件 | 作用 |
+```powershell
+# 1. build the proxy first
+cd inject\proxy; build.bat; cd ..\..
+
+# 2. offline checks (no Arma process)
+python tools\proxy_smoke_test.py
+python tools\probe_smoke_test.py
+
+# 3. after a probe capture (the user runs the game)
+python tools\analyze_capture.py "$env:ARMA3_DIR"
+```
+
+## Lab notes (selected)
+
+| File | Purpose |
 |---|---|
-| build_tonemap.ps1 | 编 `tonemap_agx/aces` + `ssao_final` → `inject/presets/GP_*.dxbc`；自动选最新 SDK 的 fxc |
-| build_present.ps1 | 编 Present 全屏接触阴影 4 个 entry → `inject/present/*.dxbc` + 内嵌头 |
+| `pbo_shdc_probe.py` / `shdc_inventory.py` / `shdc_csv.py` | PBO/`.shdc` shader cache inventory. |
+| `shdc_extract_dxbc.py` / `match_tonemap.py` | Extract a DXBC by name; instruction-level similarity against a reference. |
+| `crop.py` / `crops.py` / `region_diff.py` | Crop and region-difference real frames. |
+| `cmp_cfg.py` / `config_ab.py` | Config A/B. |
+| `grade_compare*.py` / `grade_stats.py` | Colour-grade comparison and statistics. |
+| `sharp_hist.py` / `tonemap_demo.py` | Sharpness history; tonemap curve plots. |
+| `capture_loop.ps1` / `capture_loop2.ps1` | External timed capture helpers. |
+| `ao_*.py` / `contact_shadow_smoke.py` | Offline AO / contact-shadow experiments (see docs/12; contact shadow is shelved). |
+| `exe_*.py` / `rtti_*.py` / `vtable_slots.py` | Static RE helpers for `Arma3_x64.exe`. |
+| `simulate_*.py` / `simstep_*.py` / `parallelfor_xref.py` | `World::Simulate` / job-thread xrefs. |
+| `server_*.py` / `fit_ai_wp_cost.py` | Server-side CPU attribution and the AI×waypoint fit. |
+| `yaab_*.py` / `ab_*.py` | YAAB alignment / comparison / HTML reports. |
+| `gpcpu/` | `gpsample` / `gpwatch` / `gpmeasure` sources + DS harnesses (legacy; see its README). |
 
-> `build_tonemap.ps1` 用 **ps_4_0 且不带 /O3**，可逐位复现已出货载荷。改 profile 会静默改变 SSAO 输出。
+Some lab scripts are duplicated (`ao_offline`/`2`/`3`, `cmp_ssao`/`2`,
+`ratio`/`3`, `exe_scan`/`2`). They are kept because the intermediate versions
+document what was tried; the newest file is not always the "correct" one. When a
+result matters, prefer the code path named in `docs/RESULTS.md` or `docs/21`.
 
-## 注入器验证
+## Notes
 
-| 文件 | 作用 |
-|---|---|
-| smoke_test.py | 用真实 D3D11 设备验证代理 DLL 的替换逻辑（不启动游戏） |
-| strip_test2.py | 验证 D3DStripShader 对字节码的影响 |
-
-## 图像对比
-
-| 文件 | 作用 |
-|---|---|
-| crop.py / crops.py | 从实拍帧裁切细节区域 |
-| cmp_cfg.py / config_ab.py | 配置改动前后对比 |
-| cmp_spec.py / cmp_spec2.py | 镜面注入前后对比 |
-| region_diff.py | 按区域统计像素差 |
-| grade_compare.py / grade_compare2.py / grade_stats.py | 调色变体对比与统计 |
-| sharp_hist.py | 锐度指标（拉普拉斯方差）历史对比 |
-| tonemap_demo.py | 生成 tonemap 曲线示意对比图 |
-| capture_loop.ps1 | 外部定时抓帧（备用采集） |
-| pe_imports.py | 解析 exe 导入表（确认渲染 API 依赖） |
+- Reverse-engineering dumps (`extract/*.txt`, `extract/*.csv`) are generated
+  from a local Arma install; they are reference data, not redistributable assets.
+- Do not commit captures containing player names, server names, or local paths.

@@ -1,13 +1,13 @@
 param([int]$N = 160, [int]$Reps = 3, [int]$Sec = 60)
 $ErrorActionPreference = 'Stop'
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+. (Join-Path $PSScriptRoot '_paths.ps1')
 $exe = Join-Path $game 'arma3server_x64.exe'
 $prof = Join-Path $env:LOCALAPPDATA 'GP_arma_server'
-$cfg = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\server.cfg'
-$basic = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\basic.cfg'
+$cfg = (Join-Path $repo 'server\server.cfg')
+$basic = (Join-Path $repo 'server\basic.cfg')
 $m = Join-Path $game 'MPMissions\GP_ServerTest.Altis'
-$bak = 'C:\Users\74738\gp_re\initServer_beh_backup.sqf'
-$prog = 'C:\Users\74738\gp_re\beh_progress.txt'
+$bak = (Join-Path $work 'initServer_beh_backup.sqf')
+$prog = (Join-Path $work 'beh_progress.txt')
 $tpl = @'
 enableSaving [false, false];
 setDate [2035, 7, 12, 12, 0];
@@ -99,8 +99,8 @@ Remove-Item $prog -Force -EA SilentlyContinue
 $results = @()
 try {
   Set-Content -Path (Join-Path $m 'initServer.sqf') -Value ($tpl.Replace('__N__', [string]$N)) -Encoding UTF8
-  Copy-Item 'C:\Users\74738\gp_re\gpgate3.dll' $game -Force
-  Copy-Item 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\injector.exe' $game -Force
+  Copy-Item (Join-Path $work 'gpgate3.dll') $game -Force
+  Copy-Item (Join-Path $repo 'inject\counter\injector.exe') $game -Force
   $cfgs = @(@{m=0; n=0; d=1; label='pass'}, @{m=2; n=1; d=2; label='pair50'})
   foreach ($c in $cfgs) {
     for ($r = 1; $r -le $Reps; $r++) {
@@ -122,6 +122,6 @@ try {
   Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
   Copy-Item $bak (Join-Path $m 'initServer.sqf') -Force
   Remove-Item (Join-Path $game 'gpgate3.dll'),(Join-Path $game 'injector.exe') -Force -EA SilentlyContinue
-  $results | ConvertTo-Json -Depth 4 | Set-Content 'C:\Users\74738\gp_re\beh_results.json' -Encoding UTF8
+  $results | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $work 'beh_results.json') -Encoding UTF8
   Add-Content $prog 'DONE'
 }

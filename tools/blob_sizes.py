@@ -1,7 +1,7 @@
 
 import struct, zlib, glob, os
 sizes = {}
-for fn in sorted(glob.glob(r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shdc\*.shdc")):
+for fn in sorted(glob.glob(r"<REPO>\extract\shdc\*.shdc")):
     b = open(fn,'rb').read()
     i = 0
     while True:

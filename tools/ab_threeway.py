@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image, ImageDraw
 from numpy.lib.stride_tricks import sliding_window_view
-D = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo"
+D = r"<REPO>\demo"
 names = [("原版", "ab-cc-baseline.png"),
          ("原版+游戏调色", "ab-cc-cold_highContrast.png"),
          ("我们的注入", "ab-injected-baseline.png")]

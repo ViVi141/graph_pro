@@ -1,7 +1,17 @@
 # CPU 采样器（gpsample）
 
+> 公开研究仓库：仅限单人 / 编辑器 / 无 BattlEye 的私有服。`gpsample.dll` /
+> `gptimer.dll` / `gpindirect.dll` / `injector.exe` 都是本地构建产物，不入库；
+> 需要 VS2022 自己 `build_*.bat`。不要与 `d3d11.dll` 画面代理同时挂。
+
 不改游戏代码：注入后按 RIP 采样，写入 `GP_sample.log` / `GP_sample_top.txt`。  
 完整门禁见 `docs/13-cpu-hotspot.md`。
+
+先设置游戏目录（脚本默认读 `$env:ARMA3_DIR`）：
+
+```powershell
+$env:ARMA3_DIR = "C:\Program Files (x86)\Steam\steamapps\common\Arma 3"
+```
 
 本机若遇「禁止运行脚本」，一律加 `-ExecutionPolicy Bypass`（不要改系统策略）。
 

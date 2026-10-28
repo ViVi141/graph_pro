@@ -81,6 +81,6 @@ for i, (title, fn, useb) in enumerate(curves):
     dd = ImageDraw.Draw(grid)
     dd.text((px + 2, py + 10), title + "    横轴 = HDR 输入 0–8   纵轴 = 显示亮度", font=small, fill=(238, 238, 240))
 
-outp = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\tonemap-demo.png"
+outp = r"<REPO>\demo\tonemap-demo.png"
 grid.save(outp)
 print("saved", outp, grid.size)

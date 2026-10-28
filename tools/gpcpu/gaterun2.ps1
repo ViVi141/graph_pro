@@ -1,12 +1,12 @@
 param([int]$N = 160, [int]$Mode = 1, [int]$Period = 20, [int]$Num = 1, [int]$Den = 2, [int]$Sec = 40)
 $ErrorActionPreference = 'Stop'
-$game = 'D:\SteamLibrary\steamapps\common\Arma 3'
+. (Join-Path $PSScriptRoot '_paths.ps1')
 $exe = Join-Path $game 'arma3server_x64.exe'
 $prof = Join-Path $env:LOCALAPPDATA 'GP_arma_server'
-$cfg = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\server.cfg'
-$basic = 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\server\basic.cfg'
+$cfg = (Join-Path $repo 'server\server.cfg')
+$basic = (Join-Path $repo 'server\basic.cfg')
 $m = Join-Path $game 'MPMissions\GP_ServerTest.Altis'
-$bak = 'C:\Users\74738\gp_re\initServer_gate2_backup.sqf'
+$bak = (Join-Path $work 'initServer_gate2_backup.sqf')
 $tpl = @'
 enableSaving [false, false];
 setDate [2035, 7, 12, 12, 0];
@@ -54,8 +54,8 @@ diag_log format ["[GP] spawn done units=%1 groups=%2", count allUnits, _nGroups]
 Copy-Item (Join-Path $m 'initServer.sqf') $bak -Force
 try {
   Set-Content -Path (Join-Path $m 'initServer.sqf') -Value ($tpl.Replace('__N__', [string]$N)) -Encoding UTF8
-  Copy-Item 'C:\Users\74738\gp_re\gpgate2.dll' $game -Force
-  Copy-Item 'C:\Users\74738\Desktop\Projects\Arma3\graph_pro\inject\counter\injector.exe' $game -Force
+  Copy-Item (Join-Path $work 'gpgate2.dll') $game -Force
+  Copy-Item (Join-Path $repo 'inject\counter\injector.exe') $game -Force
   Set-Content (Join-Path $game 'GP_gatemode.txt') -Value ("$Mode $Period $Num $Den") -Encoding Ascii -NoNewline
   Remove-Item (Join-Path $game 'GP_gate.log') -Force -EA SilentlyContinue
   Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
@@ -83,7 +83,7 @@ try {
   $alive = [bool](Get-Process -Id $p.Id -EA SilentlyContinue)
   Write-Host ("server alive=" + $alive)
   $tag = "gate2_$($Num)of$($Den).txt"
-  Copy-Item (Join-Path $game 'GP_gate.txt') (Join-Path 'C:\Users\74738\gp_re' $tag) -Force -EA SilentlyContinue
+  Copy-Item (Join-Path $game 'GP_gate.txt') (Join-Path $work $tag) -Force -EA SilentlyContinue
 } finally {
   Get-Process arma3server_x64 -EA SilentlyContinue | Stop-Process -Force
   Start-Sleep -Seconds 2

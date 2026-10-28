@@ -64,6 +64,10 @@ inject/counter/funcs_server.bin
 _tmp_*/
 tmp/
 
+# Timestamped snapshots of Documents\Arma 3 (profile/cfg backups taken by hand).
+# Kept out of Git: they contain the local player profile, not project data.
+config/backup-*/
+
 # --- Extract: large / regenerable / timestamped ---
 extract/**/*.shdc
 extract/**/*.png
@@ -114,3 +118,17 @@ dxDiag.txt
 *.bak
 *.orig
 *~
+
+# --- Public-repo hygiene ---
+# Local safety bundles / scratch that must never be published.
+_local/
+*.bundle
+config/backups/
+# Personal profiles are never committed; examples use a different suffix.
+*.Arma3Profile
+# Compiled PBOs are build artefacts; keep only mod.cpp / rvmat sources.
+*.pbo
+# Archives
+*.zip
+*.7z
+*.tar.gz

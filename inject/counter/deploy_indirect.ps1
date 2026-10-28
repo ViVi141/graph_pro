@@ -1,4 +1,4 @@
-param([string]$Game = 'D:\SteamLibrary\steamapps\common\Arma 3')
+param([string]$Game = $env:ARMA3_DIR)
 $ErrorActionPreference = 'Stop'
 $src = $PSScriptRoot
 foreach ($n in @('gpindirect.dll', 'injector.exe')) {

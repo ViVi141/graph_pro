@@ -1,11 +1,11 @@
 # Arma 3 渲染交互面地图（任务 1）
 
 > 环境基线（本机实测，非通用推断）
-> - 游戏：`D:\SteamLibrary\steamapps\common\Arma 3`，arma3_x64.exe **2.22.154089**
+> - 游戏：`<ARMA3>`，arma3_x64.exe **2.22.154089**
 > - 图形 API：**DirectX 11**（exe 导入 `d3d11.dll`/`DXGI.dll`、`D3DCOMPILER`；**无** `d3d9.dll`、**无** `dxcompiler` → 不存在 DX9/DX12 路径）
 > - GPU：Intel 核显（Arc/Xe，驱动 32.0.101.9150），原生屏 2880×1800@120，游戏内 1920×1080 窗口
 > - 反作弊：BattlEye 已随游戏安装（`arma3battleye.exe`）
-> - 基线备份：`baseline/Arma3.cfg`、`baseline/74738.Arma3Profile`、`baseline/rpt-head.txt`
+> - 基线备份：`baseline/Arma3.cfg`、`baseline/user.Arma3Profile`、`baseline/rpt-head.txt`
 
 ---
 

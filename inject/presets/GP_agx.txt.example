@@ -1,0 +1,30 @@
+# AgX runtime tune:  E K S [shoulder]
+#
+# Copy to the game directory as `GP_agx.txt`. Hot-reloaded every 60 frames — you
+# can edit it while the game runs and watch the change. Delete the file and the
+# shader's baked-in defaults (0.55 / 1.40 / 1.20 / off) come back.
+#
+#   E         exposure fed into the AgX curve
+#   K         contrast around mid-grey
+#   S         saturation
+#   shoulder  soft highlight knee, 0 = off. Values above it are compressed
+#             asymptotically toward 1.0 instead of being hard-clipped; the cost
+#             is that 1.0 itself maps to ~0.94, so a blown sky goes slightly grey.
+#
+# Why these knobs exist: the project's own A/B targets are contrast sigma
+# 0.16-0.22, dark share 10-20%, saturation 15-25%, few clipped pixels. The
+# shipped measurement was sigma 0.142, saturation ~15%, 15.4% overexposed — i.e.
+# a touch soft, a touch desaturated, and clipping. The line below nudges contrast
+# and saturation toward those targets without touching exposure:
+#
+#   K 1.40 -> 1.44 (+3%), S 1.20 -> 1.24 (+3%)
+#
+# Try in this order (one lap each, same spot/weather):
+#   0.55 1.44 1.24 0            <- shipped starting point
+#   0.55 1.48 1.28 0            <- closer to the targets
+#   0.55 1.48 1.28 0.85         <- same, with highlight headroom
+#   0.55 1.40 1.20 0            <- the old look, for comparison
+#
+# Measure with the existing tools instead of eyeballing:
+#   python tools\grade_stats.py <before.png> <after.png>
+0.55 1.44 1.24 0

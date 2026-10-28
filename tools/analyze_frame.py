@@ -1,7 +1,7 @@
 
 from PIL import Image
 import numpy as np
-p = r"C:\Users\74738\Documents\Arma 3\Screenshots\gp_r_baseline.png"
+p = r"<ARMA3_DOCS>\Screenshots\gp_r_baseline.png"
 a = np.asarray(Image.open(p).convert("RGB")).astype(np.float32)/255.0
 lum = 0.2126*a[...,0]+0.7152*a[...,1]+0.0722*a[...,2]
 mx = a.max(axis=2); mn = a.min(axis=2)

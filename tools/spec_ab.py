@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-g = r"D:\SteamLibrary\steamapps\common\Arma 3"
+g = r"<ARMA3>"
 W, H = 1920, 1080
 a = np.fromfile(g + r"\GP_shot_1.rgb", dtype=np.uint8).reshape(H, W, 4)[:, :, :3].astype(np.int16)
 b = np.fromfile(g + r"\GP_shot_2.rgb", dtype=np.uint8).reshape(H, W, 4)[:, :, :3].astype(np.int16)
@@ -16,5 +16,5 @@ print("luminance diff: mean %.4f  p99 %.1f  max %.0f" % (dl.mean(), np.percentil
 if d.max() > 2:
     ys, xs = np.where(d > 3)
     print("diff bbox: x %d..%d  y %d..%d  (%d px)" % (xs.min(), xs.max(), ys.min(), ys.max(), len(xs)))
-    Image.fromarray(np.clip(d*8, 0, 255).astype(np.uint8)).resize((W//2, H//2)).save(r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo\spec-diff.png")
+    Image.fromarray(np.clip(d*8, 0, 255).astype(np.uint8)).resize((W//2, H//2)).save(r"<REPO>\demo\spec-diff.png")
     print("wrote demo/spec-diff.png (diff x8)")

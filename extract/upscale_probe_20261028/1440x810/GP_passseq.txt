@@ -1,0 +1,10 @@
+# Fullscreen pass sequence: one frame, execution order.
+# crc/psLen come from CreatePixelShader (psLen = bytes the game passed).
+# src = the texture this pass sampled; min/max/mean are measured on a
+# 256x144 grid, >1% / >4% are the share of samples above 1.0 / 4.0
+# (that is what tells HDR scene-linear from display-referred LDR).
+# capture: present=243  backbuffer=1920x1080  render=1440x810
+
+idx  psCrc      psLen   input(SRV)     output(RTV)    fmt     src            sfmt  min..max      mean/>1%
+0    9576A9FE 816     1x1            1920x1080      28/28   1x1            28    1.000..1.000  1.000/0.0%
+1    AC4796AD 4868    1440x810       1440x810       10/10   1440x810       10    0.002..5.375  0.735/40.6%

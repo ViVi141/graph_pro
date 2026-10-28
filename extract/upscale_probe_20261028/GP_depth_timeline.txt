@@ -1,0 +1,7 @@
+present=60 dsv=00000241B24BFF20 fmt=45 min=0.9909 max=1.0000 avg=0.9973 sky%=70.0 cloud%=30.0 stencil_nz%=0.0 sample=1
+clean_dump present=60 cloud%=30.0 sky%=70.0 fmt=45
+present=61 dsv=0000024291AC84E0 fmt=44 min=0.9909 max=1.0000 avg=0.9973 sky%=70.0 cloud%=30.0 stencil_nz%=0.0 sample=1
+present=80 dsv=00000241B24BFF20 fmt=45 min=0.9909 max=1.0000 avg=0.9973 sky%=70.0 cloud%=30.0 stencil_nz%=0.0 sample=2
+present=81 dsv=0000024291AC84E0 fmt=44 min=0.9909 max=1.0000 avg=0.9973 sky%=70.0 cloud%=30.0 stencil_nz%=0.0 sample=2
+present=100 dsv=00000241B24BFF20 fmt=45 min=0.9909 max=1.0000 avg=0.9973 sky%=70.0 cloud%=30.0 stencil_nz%=0.0 sample=3
+present=101 dsv=0000024291AC84E0 fmt=44 min=0.9909 max=1.0000 avg=0.9973 sky%=70.0 cloud%=30.0 stencil_nz%=0.0 sample=3

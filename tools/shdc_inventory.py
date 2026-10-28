@@ -1,6 +1,6 @@
 
 import re, os, collections
-d = r"C:\Users\74738\Desktop\Projects\Arma3\graph_pro\extract\shdc"
+d = r"<REPO>\extract\shdc"
 pat = re.compile(rb'([A-Za-z][A-Za-z0-9_]{2,40})\x00((?:ps|vs|gs|cs)_[45]_[01])\x00([0-9A-F]{8})\x00')
 total = 0
 rows = []

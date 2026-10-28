@@ -9,9 +9,9 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-INJECT = Path(r"C:\Users\74738\Videos\2026-10-23 23-41-19.mp4")
-VANILLA = Path(r"C:\Users\74738\Videos\2026-10-23 23-45-17.mp4")
-OUT_DIR = Path(r"c:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo")
+INJECT = Path(r"<USERPROFILE>\Videos\2026-10-23 23-41-19.mp4")
+VANILLA = Path(r"<USERPROFILE>\Videos\2026-10-23 23-45-17.mp4")
+OUT_DIR = Path(r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo")
 
 
 def grab(cap: cv2.VideoCapture, fi: int) -> np.ndarray | None:

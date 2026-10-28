@@ -9,9 +9,9 @@ import cv2
 import imageio_ffmpeg
 import numpy as np
 
-DEMO = Path(r"c:\Users\74738\Desktop\Projects\Arma3\graph_pro\demo")
-INJ_SRC = Path(r"C:\Users\74738\Videos\2026-10-23 23-41-19.mp4")
-VAN_SRC = Path(r"C:\Users\74738\Videos\2026-10-23 23-45-17.mp4")
+DEMO = Path(r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo")
+INJ_SRC = Path(r"<USERPROFILE>\Videos\2026-10-23 23-41-19.mp4")
+VAN_SRC = Path(r"<USERPROFILE>\Videos\2026-10-23 23-45-17.mp4")
 
 # User anchors: cut everything before YAAB content
 INJ_START_S = 31.0
