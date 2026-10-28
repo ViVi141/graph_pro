@@ -371,16 +371,18 @@ Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天�
 
 ## 2026-10-28 超分可行性裁决（DLSS / FSR / XeSS / DLSS 5 通道）
 
-> **本节在当天被自我更正过一次。** 初版写"结构性 NO-GO、换 RTX 也不行"，该说法**有误**并已撤回。
-> 事实：DLSS Super Resolution **官方支持 DX11**（NVIDIA 编程指南原文 *"DirectX11, DirectX 12, or Vulkan based"*），
-> DLSS 5 也有三条 DX11 通道。**技术可行，本机硬件不行。** 完整论证见 [10-dll-options.md §2.13](10-dll-options.md)。
+> **本节在当天被修正过两次。**
+> ① 初版写"结构性 NO-GO、换 RTX 也不行"，该说法**有误**并已撤回。
+> ② 第二版又以"本机 Intel 核显"为依据下结论——但**本机是开发机，不是目标机**，硬件不作判据。
+> 现行结论：**跨卡兼容 + 技术验证**；唯一剩下的硬障碍是「放大环节能否被接管」，已实现探测器。
+> 完整论证见 [10-dll-options.md §2.13](10-dll-options.md)。
 
 | 命题 | 判定 |
 |---|---|
 | "DLSS 5 有专门兼容 DX11 的版本" | ✅ **成立**（`dx11-bridge` / `Feeder` / `oneclick`） |
 | "网上有 Arma 3 开 DLSS 的视频、画质确实提升" | ✅ **可能成立**（NVIDIA 卡 + ReShade + Feeder，或 Smooth Motion 驱动插帧） |
-| "本机能这么做" | ❌ 无 NVIDIA 显卡，链路起点不存在 |
-| "能解决本机卡顿" | ❌ GPU 非瓶颈，且联机时 ReShade 深度被解绑 |
+| 目标机（RTX 50）走 Feeder | ✅ 技术可行；代价是植被拖影 + 与 d3d11 代理分层 |
+| 开发机（Intel 核显）验证 | ❌ 只能验证非 GPU 部分（如放大环节探测） |
 
 ### 三条 DX11 路线与阻塞点
 

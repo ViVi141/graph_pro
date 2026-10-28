@@ -16,9 +16,11 @@
 - 测试机是 **Intel 核显**（RESULTS.md 第 1 节）。这一条直接判死 DLSS（需 RTX）和 Nsight（需 NVIDIA 卡），也让 DXR/BVH 路线性价比极低。
 - 私有服、无 BattlEye，允许注入；但**联机状态**会影响 ReShade 的深度可用性（见 2.1）。
 
-> **2026-10-28 修订（两次）**：超分一节已按新证据重写并**自我更正过一次**。
-> 初版把 DLSS 判为"结构上不可能"，该说法**有误**——DLSS SR 官方支持 DX11，DLSS 5 也有 DX11 通道。
-> 正确结论：**技术可行，但本机（Intel 核显）硬件层不可行**，且联机深度与 CPU-bound 两重障碍仍在。
+> **2026-10-28 修订（三次）**：
+> ① 初版结论"DLSS 5 要 D3D12、结构上不可能"**有误**并撤回——DLSS SR 官方支持 DX11，DLSS 5 也有 DX11 通道。
+> ② 第二版把"本机 Intel 核显"当作结论依据之一，但**本机是开发机，不是目标机**；硬件不再是判据。
+> ③ 现行结论：**跨卡兼容 + 技术验证为当前目标**。对目标机而言技术路径存在（见 2.13.2 / 2.13.3），
+> 唯一剩下的**硬技术障碍**是「游戏的放大环节能否被接管」（2.13.8），已实现探测器来回答它。
 > 见 [2.13](#213-dlss--fsr--xess--dlss-5-的-dx11-通道2026-10-28-重写)。
 
 ---
@@ -178,13 +180,18 @@
 
 **修正后的结论**
 
+> **前提修正（2026-10-28）**：本机 Intel 核显是**开发机**，不代表目标机。
+> 因此下面凡是以"本机无 NVIDIA 卡"为依据的否决，**不作为最终判断**，只作为"开发机无法直接验证"的说明。
+> 目标机按**跨卡兼容**设计；真正的技术判据见 2.13.8。
+
 | 命题 | 判定 |
 |---|---|
 | "DLSS 5 有专门兼容 DX11 的版本" | ✅ **成立**（bridge / Feeder / oneclick 三条路线） |
 | "网上有 Arma 3 开 DLSS 的演示" | ✅ **可能成立**（NVIDIA 卡 + ReShade + Feeder + 神经模型） |
 | "画质确实提升" | ✅ **成立**（DLAA 抗锯齿收益真实可见） |
-| "本机能这么做" | ❌ **不成立**：无 NVIDIA 显卡，链路起点不存在 |
-| "能解决本机卡顿" | ❌ **不成立**：GPU 非瓶颈（2.13.6），且联机时 ReShade 深度被解绑 |
+| 目标机（RTX 50）能用 Feeder | ✅ **技术上可行**，代价是植被拖影与层冲突 |
+| 开发机（Intel 核显）能验证 | ❌ 不能，仅可验证**非** GPU 相关部分（如放大环节探测） |
+| 能否同时拿到帧率 | ⚠️ 取决于目标机是否 CPU-bound；超分只省 GPU 时间 |
 
 #### 2.13.1 硬事实核对（【实测】，本机 + 本仓库）
 
@@ -230,9 +237,12 @@ Arma 3 的导入表里没有 `nvngx`，**没有可镜像的调用**。
 
 关键点：**它依赖 ReShade 的 Generic Depth**，和我们「在 `OMSetRenderTargets` 里直接抓游戏 DSV、零拷贝」是两条完全不同的深度获取路径。
 
-#### 2.13.3 为什么这些通道对本机仍然不可用
+#### 2.13.3 开发机为什么无法直接验证（不代表目标机不可行）
 
-##### (1) 硬件：链路起点就不存在
+> ⚠️ **前提：本机 Intel 核显是开发机。** 本节只说明"在这台机器上跑不起来"，
+> **不构成**对目标机的否决。目标机若为 RTX 50 系，2.13.2 的路线 B 在技术上成立。
+
+##### (1) 硬件：开发机无法直接验证
 
 Feeder 的 Requirements 原文：
 
@@ -241,20 +251,24 @@ Feeder 的 Requirements 原文：
 
 Requirements 表首项还写着：*"the game must be rendering on the **NVIDIA GPU**"*。
 
-本机：`Intel(R) Graphics`，驱动 `32.0.101.9150`（Ultra 5 336H 核显）。
-**没有 NVIDIA 显卡 → A/B/C 三条路线的起点都不存在。**
+开发机：`Intel(R) Graphics`，驱动 `32.0.101.9150`（Ultra 5 336H 核显）→ **无法在本机跑通 A/B/C**。
+但这是**验证环境**的限制，不是方案的终局：目标机为 RTX 50 时路线 B 成立。
 
-##### (2) 联机：Feeder 依赖的 ReShade 深度会被解绑
+**对目标机仍有意义的结论**：路线 B/C 需 RTX 50；若目标机是 RTX 40 及以下，DLSS 5 **神经渲染不可用**（DLSS SR 仍可用）。
+
+##### (2) 联机：Feeder 依赖的 ReShade 深度会被解绑（**目标机同样存在**）
 
 Feeder 要求 *"ReShade 6.8+ with add-on support, **Generic Depth add-on enabled** and picking the scene depth"*。
 
 而 2.1 已记录 ReShade 的联机行为（源码 `runtime.cpp` L952–981）：`addon_enabled = traffic < 10;`
 私有服同样是联机 → **ReShade 会主动解绑深度语义**，Feeder 拿不到可靠深度。
+**这是与硬件无关的架构性障碍，换任何 NVIDIA 卡都一样。**
 
-##### (3) 冲突：与我们现有的 d3d11 代理争同一层
+##### (3) 冲突：与现有 d3d11 代理争同一层（**目标机同样存在**）
 
 ReShade 的 D3D11 安装方式就是**放一个本地代理 DLL**（`dxgi.dll` / `d3d11.dll`）。
 我们的 `d3d11.dll` 已经占位，接入 Feeder 等于重排整个注入链（参见 2.1 的分层分析）。
+**这也是跨卡不变的结构问题**，需要用 `dxgi.dll` 分层来解，且"谁在外层"必须实测。
 
 ##### (4) 供给与合规：模型不是公开分发的
 
@@ -328,17 +342,71 @@ DLSS 2+ / FSR 2+ / XeSS 的输入：**color + depth + motion vectors + jitter（
   理由链：DLSS 只在 GPU-bound 时有用，而 Arma 通常 CPU-bound；且引擎缺原生输入。
   **注意**：这是"官方不会做"，不等于"民间做不到"——2.13.2 的 Feeder 正是民间绕过原生支持的方案。
 
-#### 2.13.8 插入点陷阱（若仍要做 FSR 1）
+#### 2.13.8 唯一剩下的硬障碍：放大环节能否被接管（含已实现的探测器）
+
+这是**唯一与显卡无关**的真实技术约束，也是所有超分路线共同的前置。
 
 Arma 的 Sampling 是**引擎内部**降分辨率渲染、再自行拉伸到 backbuffer 的。因此：
 
-    Present 钩子拿到的是「已放大过的 1920x1080 backbuffer」
+    Present 钩子拿到的是「已放大过的 backbuffer」
 
-在 Present 上做 FSR = 对放大过的图再放大一次（最多等于锐化）。正确位置只有：
+在 Present 上做超分 = 对放大过的图再放大一次（最多等于锐化）。要接超分，只能接管那个放大环节。
 
-1. **替换游戏自己的 upscale pass**（与现替换 tonemap 同手法：`CreatePixelShader` 按 size+crc / 反汇编指纹匹配），
-   并确认其输入是低分辨率 SRV。我们已有 `CreatePixelShader` 替换 + 全屏 RT 普查基建，**估 3–5 人日**。
-2. 让游戏渲染到全分辨率 RT 再由我们降+超 —— 更慢，不划算。
+##### 已实现：`GP_probe_scale.txt` 探测器
+
+判据简单且可靠——**放大环节的特征就是「输入的 SRV 比输出的 RTV 小」**。
+
+```text
+每帧每个全屏 draw（vertexCount 3/4/6）：
+  OMGetRenderTargets  -> 输出 RTV 尺寸
+  PSGetShaderResources-> 最大 SRV 尺寸
+  若 inW < outW 或 inH < outH  =>  这就是放大环节
+  再 PSGetShader      -> 拿 size + crc（从 CreatePixelShader 记录表查）
+```
+
+用法：
+
+```powershell
+# 1) 开探针
+copy inject\presets\GP_probe_scale.txt.example  "D:\...\Arma 3\GP_probe_scale.txt"
+# 2) 进游戏，把 Sampling 调到 70% 或 50%（100% 时输入=输出，永远不会命中）
+# 3) 玩几分钟，读报告
+Get-Content "D:\...\Arma 3\GP_upscale.txt"
+```
+
+报告示例（命中时）：
+
+```text
+fullscreen_draws=1832  upscale_candidates_hits=412  distinct=1  psKnown=137
+
+input(SRV)             output(RTV)            fmt in/out psLen      psCrc
+1344x756               1920x1080              28/28      1024       A1B2C3D4  hits=412
+```
+
+拿到 `psLen` + `psCrc` 后，即可写入 `GP_replace.txt` 替换该 pass —— 与现在替换 tonemap 完全同一套机制。
+
+**若报告为空**（"No fullscreen pass with input < output"），本身也是答案，有两种可能：
+
+1. Sampling 还是 100% → 降低后重试；
+2. 拉伸不是由一个 PS pass 完成（可能是 VS-only blit，或交给 DXGI/交换链缩放）。
+   此时 FSR1 必须换插入点，且**这条负面结论同样值得记录**。
+
+##### 后续路线分叉（取决于探测器结果）
+
+| 探测器结果 | 能做什么 |
+|---|---|
+| 命中，输入是低分辨率 SRV | ✅ 可换 FSR1/NIS（跨卡，**不依赖 NVIDIA**）；也是判断"MV 能否在此之前注入"的关键坐标 |
+| 命中，但输入已是 backbuffer 尺寸 | 说明放大在更早处 → 需要继续往上游找 |
+| 未命中 | 放大不在 PS 里 → 考虑 DXGI 层（`IDXGISwapChain::ResizeBuffers` / `SetSourceSize`）或放弃 |
+
+##### 工作量
+
+| 项 | 工作量 |
+|---|---|
+| 探测器（**已完成**） | — |
+| 定位并替换为 FSR1（命中前提） | 3–5 人日 |
+| 判断 MV/jitter 注入可行性 | 需先有探测器结果才能估 |
+
 
 #### 2.13.9 若要真正绕过 CPU 瓶颈
 

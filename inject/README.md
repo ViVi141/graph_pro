@@ -38,7 +38,8 @@
 | GP_light_auto.txt | `auto 10` | 用 CB 绑定光向（需 `GP_light_bind.txt`） |
 | GP_light_bind.txt.example | `size idx` | 改名为 `GP_light_bind.txt` |
 | GP_cb_dump.txt.example | `1 512 4096 120 64` | 改名为 `GP_cb_dump.txt` 开 CB dump |
-| GP_probe*.example | — | 探针 |
+| GP_probe*.example | — | 探针（`GP_probe_mrt` / `GP_probe_scale`） |
+| GP_probe_scale.txt.example | — | **放大环节探测器**：找"输入 SRV < 输出 RTV"的全屏 pass，输出 `GP_upscale.txt`（含 psLen/psCrc） |
 | GP_adapt.txt.example | `1 0.02 0.50 0.25` | 自适应 AgX 控制器（**默认关**，见下） |
 
 ### GP_adapt.txt 格式
@@ -78,8 +79,22 @@
 
 缺省：`alpha=0.35`（时域）、`luma0=0.05` / `luma1=0.18`（SSAO 明度保护）。热重读。
 
-### GP_light.txt / 自动光向
+### GP_probe_scale.txt / 放大环节探测器
 
+超分（FSR1/NIS）只能插在游戏的「放大环节」，而 `Present` 拿到的已是放大后的图。
+本探针用来定位那个环节：
+
+1. 复制 `presets\GP_probe_scale.txt.example` → 游戏目录 `GP_probe_scale.txt`
+2. **进游戏把 Sampling 调到 70% 或 50%**（100% 时输入=输出，永不命中）
+3. 玩几分钟后读游戏目录 `GP_upscale.txt`
+
+判据：全屏 draw 中**输入 SRV 尺寸 < 输出 RTV 尺寸**即命中；报告给出 `psLen` + `psCrc`，
+可直接写进 `GP_replace.txt` 替换该 pass。纯观察，不修改任何状态。
+
+若报告为空：要么 Sampling 还是 100%，要么放大不由单个 PS pass 完成（VS-only blit / DXGI 缩放）。
+后者本身是有价值的负面结论。
+
+### GP_light.txt / 自动光向
 - 手调：`lx ly lz steps`
 - 自动：文件内容 `auto [steps]`，并从 `GP_light_bind.txt` 读 `size floatIndex`
 - 流程：复制 `GP_cb_dump.txt.example` → dump 白天/黄昏/室内 → `python tools/cb_sun_hunt.py ... --out GP_light_bind.txt` → 复制 `GP_light_auto.txt` → `GP_light.txt`

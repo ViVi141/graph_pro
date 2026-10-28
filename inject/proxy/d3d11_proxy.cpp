@@ -463,6 +463,198 @@ static void NoteDrawClass(ID3D11DeviceContext* ctx, UINT count)
 typedef HRESULT (STDMETHODCALLTYPE *PFN_CPS)(ID3D11Device*, const void*, SIZE_T, ID3D11ClassLinkage*, ID3D11PixelShader**);
 static PFN_CPS g_origCPS = nullptr;
 
+// ---- upscale probe (GP_probe_scale.txt) ----
+// Purpose: find the pass that turns the internal render resolution
+// (renderWidth x renderHeight) into the backbuffer. That pass is the only place
+// a spatial upscaler (FSR1/NIS) can be inserted; it is also the prerequisite for
+// judging whether motion vectors could ever be injected before it.
+//
+// Detection: a full-screen draw whose *input* SRV is smaller than its *output*
+// RTV. Pure observation — nothing is modified, so this is safe to run in flight.
+struct PsSizeEntry { ID3D11PixelShader* ps; UINT size; uint32_t crc; };
+static PsSizeEntry g_psSizes[256];
+static int g_psCount = 0;
+static bool g_psOverflowLogged = false;
+
+struct ScaleSeen {
+    UINT inW, inH, outW, outH;
+    UINT psSize;
+    uint32_t psCrc;
+    int fmtIn, fmtOut;
+    long hits;
+};
+static ScaleSeen g_scaleSeen[32];
+static int g_scaleSeenN = 0;
+static int g_scaleLogs = 0;
+static long g_scaleDraws = 0;
+static long g_scaleFullscreen = 0;
+
+static bool g_probeScale = false;
+
+static void NotePixelShader(ID3D11PixelShader* ps, UINT size, uint32_t crc)
+{
+    if (!ps) return;
+    for (int k = 0; k < g_psCount; k++) {
+        if (g_psSizes[k].ps == ps) return;
+    }
+    if (g_psCount < 256) {
+        // Hold a reference: without it the pointer can be recycled by another
+        // shader and the probe would report the wrong size/crc for a real hit.
+        // Bounded by the table size, lives for the process lifetime.
+        ps->AddRef();
+        g_psSizes[g_psCount].ps = ps;
+        g_psSizes[g_psCount].size = size;
+        g_psSizes[g_psCount].crc = crc;
+        g_psCount++;
+    } else if (!g_psOverflowLogged) {
+        g_psOverflowLogged = true;
+        Log("[GP] probe_scale: shader table full (256); later shaders will show psLen=0\n");
+    }
+}
+
+static bool LookupPixelShader(ID3D11PixelShader* ps, UINT* size, uint32_t* crc)
+{
+    if (!ps) return false;
+    for (int k = 0; k < g_psCount; k++) {
+        if (g_psSizes[k].ps == ps) {
+            if (size) *size = g_psSizes[k].size;
+            if (crc) *crc = g_psSizes[k].crc;
+            return true;
+        }
+    }
+    return false;
+}
+
+static void RefreshProbeScaleFlag()
+{
+    bool on = GetFileAttributesA((ExeDir() + "\\GP_probe_scale.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+    if (on != g_probeScale) {
+        g_probeScale = on;
+        Log("[GP] probe_scale %s\n", on ? "ON" : "OFF");
+    }
+}
+
+// Called from every Draw* hook before the original call is forwarded.
+static void ProbeUpscale(ID3D11DeviceContext* ctx, UINT vertexCount)
+{
+    if (!g_probeScale || !ctx) return;
+    if (vertexCount != 3 && vertexCount != 4 && vertexCount != 6) return;  // fullscreen quad only
+    g_scaleFullscreen++;
+
+    // Output size: first bound RTV.
+    ID3D11RenderTargetView* rtv = nullptr;
+    ctx->OMGetRenderTargets(1, &rtv, nullptr);
+    if (!rtv) return;
+    UINT outW = 0, outH = 0;
+    int fmtOut = 0;
+    {
+        ID3D11Resource* res = nullptr;
+        rtv->GetResource(&res);
+        if (res) {
+            ID3D11Texture2D* tex = nullptr;
+            if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
+                D3D11_TEXTURE2D_DESC d{}; tex->GetDesc(&d);
+                outW = d.Width; outH = d.Height; fmtOut = (int)d.Format;
+                tex->Release();
+            }
+            res->Release();
+        }
+    }
+    rtv->Release();
+    if (!outW || !outH) return;
+
+    // Input size: largest bound PS SRV. The upscale source is the scene colour.
+    ID3D11ShaderResourceView* srvs[8] = {};
+    ctx->PSGetShaderResources(0, 8, srvs);
+    UINT inW = 0, inH = 0;
+    int fmtIn = 0;
+    for (int i = 0; i < 8; i++) {
+        if (!srvs[i]) continue;
+        ID3D11Resource* res = nullptr;
+        srvs[i]->GetResource(&res);
+        if (res) {
+            ID3D11Texture2D* tex = nullptr;
+            if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex)) && tex) {
+                D3D11_TEXTURE2D_DESC d{}; tex->GetDesc(&d);
+                if (d.Width * d.Height > inW * inH) { inW = d.Width; inH = d.Height; fmtIn = (int)d.Format; }
+                tex->Release();
+            }
+            res->Release();
+        }
+        srvs[i]->Release();
+    }
+    if (!inW || !inH) return;
+
+    // The signature we want: input strictly smaller than output.
+    if (inW >= outW || inH >= outH) return;
+
+    g_scaleDraws++;
+    UINT psSize = 0; uint32_t psCrc = 0;
+    ID3D11PixelShader* ps = nullptr;
+    ctx->PSGetShader(&ps, nullptr, 0);
+    const bool known = LookupPixelShader(ps, &psSize, &psCrc);
+    if (ps) ps->Release();
+
+    int slot = -1;
+    for (int k = 0; k < g_scaleSeenN; k++) {
+        if (g_scaleSeen[k].inW == inW && g_scaleSeen[k].inH == inH &&
+            g_scaleSeen[k].outW == outW && g_scaleSeen[k].outH == outH &&
+            g_scaleSeen[k].psCrc == psCrc) { slot = k; break; }
+    }
+    if (slot < 0 && g_scaleSeenN < 32) {
+        slot = g_scaleSeenN++;
+        g_scaleSeen[slot].inW = inW; g_scaleSeen[slot].inH = inH;
+        g_scaleSeen[slot].outW = outW; g_scaleSeen[slot].outH = outH;
+        g_scaleSeen[slot].psSize = psSize; g_scaleSeen[slot].psCrc = psCrc;
+        g_scaleSeen[slot].fmtIn = fmtIn; g_scaleSeen[slot].fmtOut = fmtOut;
+        g_scaleSeen[slot].hits = 0;
+        if (g_scaleLogs < 24) {
+            g_scaleLogs++;
+            Log("[GP] UPSCALE CANDIDATE %ux%u -> %ux%u fmt %d->%d psLen=%u psCrc=%08X known=%d\n",
+                inW, inH, outW, outH, fmtIn, fmtOut, psSize, psCrc, (int)known);
+            if (known) {
+                // GP_replace.txt format is: <size> <crc> <payload>
+                // <size> must equal the length the GAME passes to CreatePixelShader,
+                // which is exactly psLen in this report.
+                Log("[GP]   -> GP_replace.txt: %u %08X <payload.dxbc>   (psLen %u, crc %08X)\n",
+                    psSize, psCrc, psSize, psCrc);
+            }
+        }
+    }
+    if (slot >= 0) g_scaleSeen[slot].hits++;
+}
+
+static void WriteScaleReport()
+{
+    if (!g_probeScale) return;
+    FILE* f = fopen((ExeDir() + "\\GP_upscale.txt").c_str(), "w");
+    if (!f) return;
+    fprintf(f, "# upscale probe report\n");
+    fprintf(f, "fullscreen_draws=%ld  upscale_candidates_hits=%ld  distinct=%d  psKnown=%d\n\n",
+            g_scaleFullscreen, g_scaleDraws, g_scaleSeenN, g_psCount);
+    fprintf(f, "%-22s %-22s %-10s %-10s %s\n", "input(SRV)", "output(RTV)", "fmt in/out", "psLen", "psCrc");
+    for (int k = 0; k < g_scaleSeenN; k++) {
+        const ScaleSeen& s = g_scaleSeen[k];
+        char a[24], b[24], c[24];
+        snprintf(a, sizeof(a), "%ux%u", s.inW, s.inH);
+        snprintf(b, sizeof(b), "%ux%u", s.outW, s.outH);
+        snprintf(c, sizeof(c), "%d/%d", s.fmtIn, s.fmtOut);
+        fprintf(f, "%-22s %-22s %-10s %-10u %08X  hits=%ld\n", a, b, c, s.psSize, s.psCrc, s.hits);
+        if (!s.psSize) {
+            fprintf(f, "    ^ psLen=0 means this shader was not in the create table\n"
+                       "      (table full, or created before the proxy hooked).\n"
+                       "      The pass is still a real upscale candidate by geometry.\n");
+        }
+    }
+    if (!g_scaleSeenN) {
+        fprintf(f, "\nNo fullscreen pass with input < output was seen.\n"
+                   "Meaning: the game likely does not upscale in a single PS pass\n"
+                   "(or renderWidth == backbuffer, i.e. Sampling is at 100%%).\n"
+                   "Try again with Sampling set to 70%% in game options.\n");
+    }
+    fclose(f);
+}
+
 static bool LooksLikeSSAOFinal(const void* data, size_t len, uint32_t crc)
 {
     if (len < 200 || len > 1500) return false;
@@ -491,7 +683,11 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(ID3D11Device* self, cons
             return g_origCPS(self, r.data.data(), r.data.size(), linkage, ppShader);
         }
     }
-    return g_origCPS(self, data, len, linkage, ppShader);
+    HRESULT hr = g_origCPS(self, data, len, linkage, ppShader);
+    // Remember (pointer -> size, crc) so the upscale probe can name the shader
+    // it caught doing the stretch, ready to drop into GP_replace.txt.
+    if (SUCCEEDED(hr) && ppShader && *ppShader) NotePixelShader(*ppShader, (UINT)len, crc);
+    return hr;
 }
 
 // ---------------------------------------------------------------- constant hooks
@@ -1208,6 +1404,7 @@ static void STDMETHODCALLTYPE Hook_DrawIndexed(ID3D11DeviceContext* ctx, UINT co
         if (g_drawIdx < 24) DumpCB(ctx, g_drawIdx, g_vsCB[0]);
         g_drawIdx++;
     }
+    ProbeUpscale(ctx, count);
     g_origDrawIndexed(ctx, count, start, base);
 }
 
@@ -1223,6 +1420,7 @@ static void STDMETHODCALLTYPE Hook_Draw(ID3D11DeviceContext* ctx, UINT count, UI
         if (g_drawIdx < 40) DumpCB(ctx, g_drawIdx, g_vsCB[0]);
         g_drawIdx++;
     }
+    ProbeUpscale(ctx, count);
     g_origDraw(ctx, count, start);
 }
 
@@ -1658,6 +1856,7 @@ static void ReloadPresentCfg()
     }
     g_probeOn = GetFileAttributesA((ExeDir() + "\\GP_probe.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
     RefreshProbeMrtFlag();
+    RefreshProbeScaleFlag();
 }
 
 static bool EnsureLumaStaging()
@@ -1839,6 +2038,7 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
                     fclose(pf);
                 }
             }
+            if (g_probeScale) WriteScaleReport();
         }
         if (g_vtCtx && (rc % 600) == 0)
             Log("[GP] vtable still ours: vt12=%d vt19=%d vt20=%d\n",

@@ -1,0 +1,45 @@
+# Upscale probe (rename/copy to GP_probe_scale.txt in the game directory to enable)
+
+What it does
+------------
+Watches every fullscreen draw (vertexCount 3/4/6) and records any whose
+**input SRV is smaller than its output RTV** — that signature is an upscale pass.
+
+It changes nothing (pure observation), so it is safe to leave on while playing.
+
+Why
+---
+Arma renders at renderWidth/renderHeight (Arma3.cfg) and then stretches to the
+backbuffer. A spatial upscaler (FSR1 / NIS) can only be inserted at that stretch,
+so we need to know:
+  1. does a single PS pass do the stretch?
+  2. what is its shader (size + crc) so GP_replace.txt can target it?
+  3. is the input really a lower-resolution SRV?
+
+How to use
+----------
+1. Copy this file to the game directory as `GP_probe_scale.txt`.
+2. In game, set Sampling (分辨率采样) to 70% or 50% — otherwise the input and
+   output are the same size and nothing will match.
+3. Play a few seconds. Every 300 frames the proxy rewrites `GP_upscale.txt`.
+4. Read `GP_upscale.txt` next to the game exe.
+
+Reading the report
+------------------
+  fullscreen_draws           total fullscreen quads seen
+  upscale_candidates_hits    draws whose input < output
+  input(SRV) -> output(RTV)  e.g. 1344x756 -> 1920x1080  <-- this is the pass
+  psLen / psCrc              the pixel shader, ready for GP_replace.txt
+
+If psCrc is non-zero, the report also prints a ready-to-paste GP_replace.txt
+line in GP_shader.log. The first field is the ORIGINAL shader size as the game
+passed it (use psLen from the report for that field).
+
+If the report says "No fullscreen pass with input < output was seen":
+  - Sampling is probably 100% -> lower it and retry, or
+  - the stretch does not happen in one PS pass (e.g. done in a VS-only blit or
+    by the swapchain / DXGI scaling) -> then FSR1 must be inserted elsewhere,
+    and this negative result is itself the answer worth recording.
+
+Note: this probe is independent of GP_probe_mrt.txt and does not touch
+presentMode, so it can run alongside the normal injector presets.
