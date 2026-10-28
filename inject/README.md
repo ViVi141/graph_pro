@@ -17,8 +17,11 @@
 
 | 文件 | 内容 | 作用 |
 |---|---|---|
-| GP_replace.txt | 5860 42670B06 GP_tonemap.dxbc | tonemap → ACES |
-| GP_tonemap.dxbc | ACES v5（曝光 0.45 / 对比 1.12 / 饱和 1.08） | 全局成像 |
+| GP_replace.txt | 5860 42670B06 GP_tonemap_agx.dxbc | tonemap → **AgX**（当前出货） |
+| GP_replace_aces.txt | 5860 42670B06 GP_tonemap.dxbc | tonemap → ACES v5（备选） |
+| GP_replace_agx_neutral.txt | — | AgX neutral 变体（**无 .hlsl 源**，仅载荷） |
+| GP_tonemap_agx.dxbc | AgX，E 0.55 / K 1.40 / S 1.20 | 全局成像；`c[80].w==1.0` 时自适应接管 |
+| GP_tonemap.dxbc | ACES v5（曝光 0.45 / 对比 1.12 / 饱和 1.08） | 备选成像 |
 | GP_ssao.dxbc | smoothstep(0.15, 1.0) | AO 对比增强 |
 | GP_spec.txt | `0 0.15 0` | 镜面 **mode 0 关**（`1 boost power` = 只 boost 已有 spec） |
 | GP_spec_boost.txt | `1 0.15 0` | 选择性镜面实验（不随 deploy） |
@@ -36,13 +39,27 @@
 | GP_light_bind.txt.example | `size idx` | 改名为 `GP_light_bind.txt` |
 | GP_cb_dump.txt.example | `1 512 4096 120 64` | 改名为 `GP_cb_dump.txt` 开 CB dump |
 | GP_probe*.example | — | 探针 |
+| GP_adapt.txt.example | `1 0.02 0.50 0.25` | 自适应 AgX 控制器（**默认关**，见下） |
+
+### GP_adapt.txt 格式
+
+`enable blownTarget topTarget rate`
+
+- **默认关**（`g_adaptOn = 0`）。开启后每 15 帧做一次全幅 `CopyResource` + STAGING 回读，
+  在 CPU-bound 引擎里是实打实的开销，因此不随 deploy 出货。
+- 开启时，代理把 `g_adapt` 写入 `PSCB_PostProcess` 的 `c[80].x`，并把哨兵 `1.0` 写入 `c[80].w`；
+  AgX shader 仅在 `c[80].w == 1.0`（精确浮点比较）时用它插值 E/K/S，其余情况走固定 tune。
+- 关闭时 `c[80].w` 写 0，shader 立即回到固定曲线，不会读到残值。
+- 实测：`blown` 长期 ≈0.004（阈值 0.02），所以这个控制器在常规场景几乎不会触发。
 
 ### GP_expo.txt 格式
 
 `size lo hi [adapt] [target] [hiLo] [hiHi]`
 
-- 出货：`1696 0 1.10`
+- 出货：`1696 0 1.35`
 - adapt=1：按帧平均亮度在 `[hiLo, hiHi]` 间插值有效上限
+- **实测（2026-10-28）**：指纹通过的 `f150` 99.9% 恒为 1.0，`hi=1.35` 绝大多数帧是空操作；
+  `CLAMPED` 只在 AE 短时冲高（约 1.64）时出现。想验证机制：临时改 `1696 0 1.05` 跑一局。
 - **指纹**（防共享 size 误伤）：`c1.w≈0.4545`、`c0≈0`、`AE∈[0.05,4]`，且 `c37` 为 `(1, 0.30, AE, 1.00)` 或 `(1, 0.09, AE, 0.75)`
 - 删/改名文件会热禁用（不必重启）
 - 日志：`expo hit ... fp=1` / `CLAMPED ... fp-ok` / `expo skip fingerprint`

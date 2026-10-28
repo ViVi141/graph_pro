@@ -90,13 +90,28 @@ float4 main(PSIn i) : SV_Target
 
     float3 col = scene * c[37].x + glow * w;
 
-    // Fixed AgX tune3: E0.55 / k1.40 / s1.20. No scene-adaptive c[80] path.
-    col = AgXToneMap(col * 0.55f);
+    // Fixed AgX tune3: E0.55 / k1.40 / s1.20.
+    // Optional scene-adaptive override: the proxy writes g_adapt into c[80].x and
+    // the sentinel 1.0 into c[80].w only when the controller is enabled. Exact
+    // float compare — stale/unwritten cbuffer memory cannot hit 1.0 by accident.
+    // Higher adapt == more highlight pressure, so back the exposure off and
+    // soften the curve instead of letting channels clip.
+    float E = 0.55f;
+    float K = 1.40f;
+    float S = 1.20f;
+    if (c[80].w == 1.0f) {
+        float a = saturate(c[80].x);
+        E = lerp(0.55f, 0.42f, a);
+        K = lerp(1.40f, 1.25f, a);
+        S = lerp(1.20f, 1.10f, a);
+    }
+
+    col = AgXToneMap(col * E);
     col = pow(max(col, 0.0f), c[1].w);
 
-    col = saturate((col - 0.5f) * 1.40f + 0.5f);
+    col = saturate((col - 0.5f) * K + 0.5f);
     float g = dot(col, float3(0.299f, 0.587f, 0.114f));
-    col = saturate(lerp(float3(g, g, g), col, 1.20f));
+    col = saturate(lerp(float3(g, g, g), col, S));
 
     return float4(saturate(col), 1.0f);
 }

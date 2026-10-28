@@ -14,6 +14,15 @@
 反汇编用 Windows SDK 的 fxc：
   fxc /dumpbin /nologo xxx.dxbc
 
+## shader 构建
+
+| 文件 | 作用 |
+|---|---|
+| build_tonemap.ps1 | 编 `tonemap_agx/aces` + `ssao_final` → `inject/presets/GP_*.dxbc`；自动选最新 SDK 的 fxc |
+| build_present.ps1 | 编 Present 全屏接触阴影 4 个 entry → `inject/present/*.dxbc` + 内嵌头 |
+
+> `build_tonemap.ps1` 用 **ps_4_0 且不带 /O3**，可逐位复现已出货载荷。改 profile 会静默改变 SSAO 输出。
+
 ## 注入器验证
 
 | 文件 | 作用 |

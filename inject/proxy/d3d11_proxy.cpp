@@ -43,7 +43,9 @@ static float g_frameLuma = -1.0f;
 static int   g_expoLogs = 0;
 // Scene-adaptive AgX scheduling (GP_adapt.txt): measures the final frame's
 // highlight pressure and eases AgX toward a sky-safe exposure/contrast.
-static int   g_adaptOn = 1;
+// Default OFF: enabling it costs a full-frame GPU->CPU readback every 15 frames,
+// which is real money in a CPU-bound engine. Off == the fixed tune, bit for bit.
+static int   g_adaptOn = 0;
 static float g_adapt = 0.0f;              // 0 = street look, 1 = sky-safe
 static float g_adaptBlownTarget = 0.02f;  // fraction of clipped pixels
 static float g_adaptTopTarget = 0.50f;    // fraction of bright top-band pixels
@@ -198,10 +200,27 @@ static std::string ExeDir()
     return q == std::string::npos ? "." : s.substr(0, q);
 }
 
+// Per-launch log lines. A runaway rate-limited site once produced 27 MB / 300k
+// lines in one file, so both the site (see expo) and this cap guard the disk.
+static long g_logLines = 0;
+static const long kLogMaxLines = 100000;
+
 static void Log(const char* fmt, ...)
 {
     if (!g_log) { g_log = fopen((ExeDir() + "\\GP_shader.log").c_str(), "a"); if (!g_log) return; }
-    va_list ap; va_start(ap, fmt); vfprintf(g_log, fmt, ap); va_end(ap); fflush(g_log);
+    if (g_logLines >= kLogMaxLines) {
+        if (g_logLines == kLogMaxLines) {
+            ++g_logLines;
+            fputs("[GP] log line cap reached; further lines suppressed until restart\n", g_log);
+            fflush(g_log);
+        }
+        return;
+    }
+    ++g_logLines;
+    va_list ap; va_start(ap, fmt); vfprintf(g_log, fmt, ap); va_end(ap);
+    // Flush the crash-forensics window immediately, then batch: this runs on the
+    // render thread, and one write syscall per line is measurable there.
+    if (g_logLines <= 64 || (g_logLines % 64) == 0) fflush(g_log);
 }
 
 static bool LoadFile(const std::string& p, std::vector<uint8_t>& out)
@@ -492,8 +511,12 @@ static HRESULT STDMETHODCALLTYPE Hook_Map(ID3D11DeviceContext* ctx, ID3D11Resour
         ID3D11Buffer* buf = nullptr;
         if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Buffer), (void**)&buf)) && buf) {
             D3D11_BUFFER_DESC d{}; buf->GetDesc(&d); buf->Release();
+            // Reuse the slot already owned by this resource before claiming a free
+            // one: the old code only ever took a virgin slot, so 64 pending Maps
+            // could exhaust the table and silently stop classifying buffers.
             int slot = -1;
-            for (int k = 0; k < 64; k++) if (!g_maps[k].res) { slot = k; break; }
+            for (int k = 0; k < 64; k++) if (g_maps[k].res == res) { slot = k; break; }
+            if (slot < 0) for (int k = 0; k < 64; k++) if (!g_maps[k].res) { slot = k; break; }
             if (slot >= 0) { g_maps[slot].res = res; g_maps[slot].data = mapped->pData; g_maps[slot].size = d.ByteWidth; }
         }
     }
@@ -608,13 +631,19 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                     (fabsf(f[0]) <= 1e-3f) && (fabsf(f[1]) <= 1e-3f) &&
                     (fabsf(f[2]) <= 1e-3f) && (fabsf(f[3]) <= 1e-3f) &&
                     (before >= 0.05f && before <= 4.0f);
-                if (expoHits <= 4 || (expoHits % 400) == 0) {
+                // Log the first few, then only a sparse heartbeat. A flat "%400"
+                // fired ~265k times in one log (27 MB): this hook runs on every
+                // Map/Unmap of the frame, and unrelated 1696-byte CBs interleave
+                // with the real one (fp alternates 1/0), so neither "every Nth"
+                // with a small N nor "on any change" is bounded. Rejection samples
+                // are already reported by the rate-limited skip log below.
+                if (expoHits <= 4 || (expoHits % 100000) == 0) {
                     Log("[GP] expo hit #%d n=%u f150=%.4f c37=(%.3f %.3f %.3f %.3f) c1w=%.4f fp=%d hi=%.3f\n",
                         expoHits, n, before, c37x, c37y, before, c37w, c1w, (int)fp, hi);
                 }
                 if (!fp) {
                     expoFpReject++;
-                    if (expoFpReject <= 8 || (expoFpReject % 2000) == 0) {
+                    if (expoFpReject <= 8 || (expoFpReject == 1000) || (expoFpReject == 100000)) {
                         Log("[GP] expo skip fingerprint f150=%.4f c37=(%.3f %.3f %.3f %.3f) c1w=%.4f\n",
                             before, c37x, c37y, before, c37w, c1w);
                     }
@@ -626,32 +655,62 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
                         Log("[GP] exposure CLAMPED %.4f -> %.4f (hi %.3f) fp-ok\n", before, after, hi);
                     }
                 }
-                // Feed the AgX scene-adaptive look through unused c[80].
+                // Feed the AgX scene-adaptive look through unused c[80]. The shader
+                // only trusts this slot when c[80].w is exactly 1.0, so write the
+                // sentinel only while the controller is live; clearing it hands the
+                // look back to the baked-in tune instead of a stale adapt value.
                 if (fp && n > 323) {
-                    f[320] = g_adapt;
+                    f[320] = g_adaptOn ? g_adapt : 0.0f;
                     f[321] = g_sceneBlown;
                     f[322] = g_sceneTopBright;
-                    f[323] = 0.0f;
+                    f[323] = g_adaptOn ? 1.0f : 0.0f;
                 }
             }
             if (g_maps[i].size == 224 && n >= 40) {
-                if (g_specMode == 1 && g_specBoost > 0.0f) {
-                    float s0 = f[24], s1 = f[25], s2 = f[26];
-                    float sum = s0 + s1 + s2;
-                    // Only boost materials that already have specular (skip grass/clouds).
-                    if (sum > 0.0005f && sum < 8.0f) {
-                        float m = 1.0f + g_specBoost;
-                        f[24] = s0 * m; f[25] = s1 * m; f[26] = s2 * m;
-                        if (g_specPower > 0.0f) f[27] = g_specPower;
-                        if (g_specLogs < 6) {
-                            g_specLogs++;
-                            Log("[GP] spec boost x%.3f on (%.3f %.3f %.3f) -> (%.3f %.3f %.3f)\n",
-                                m, s0, s1, s2, f[24], f[25], f[26]);
+                // 224 B is the per-draw material CB (PSCB_Object1), but size alone
+                // has burned us before (see the expo fingerprint saga: one shared
+                // size, several owners). Guard the write with a validity check and
+                // log the first few ambient blocks so the assumption stays testable.
+                const float amb0 = f[36], amb1 = f[37], amb2 = f[38];
+                const float ae0 = f[4], ae1 = f[5], ae2 = f[6];
+                const bool ambFinite =
+                    (amb0 == amb0) && (amb1 == amb1) && (amb2 == amb2) &&
+                    (fabsf(amb0) < 1e6f) && (fabsf(amb1) < 1e6f) && (fabsf(amb2) < 1e6f);
+                const bool aeFinite =
+                    (ae0 == ae0) && (ae1 == ae1) && (ae2 == ae2) &&
+                    (fabsf(ae0) < 1e6f) && (fabsf(ae1) < 1e6f) && (fabsf(ae2) < 1e6f);
+                static int ambHits = 0, ambSkips = 0, ambLogs = 0;
+                ambHits++;
+                if (!ambFinite || !aeFinite) {
+                    ambSkips++;
+                    if (ambSkips <= 4) {
+                        Log("[GP] amb skip invalid cb224 amb=(%.3f %.3f %.3f) ae=(%.3f %.3f %.3f)\n",
+                            amb0, amb1, amb2, ae0, ae1, ae2);
+                    }
+                } else {
+                    if (ambLogs < 3 && (ambHits % 5000) == 0) {
+                        ambLogs++;
+                        Log("[GP] cb224 amb=(%.3f %.3f %.3f) ae=(%.3f %.3f %.3f) diff=(%.3f %.3f %.3f) hits=%d\n",
+                            amb0, amb1, amb2, ae0, ae1, ae2, f[16], f[17], f[18], ambHits);
+                    }
+                    if (g_specMode == 1 && g_specBoost > 0.0f) {
+                        float s0 = f[24], s1 = f[25], s2 = f[26];
+                        float sum = s0 + s1 + s2;
+                        // Only boost materials that already have specular (skip grass/clouds).
+                        if (sum > 0.0005f && sum < 8.0f) {
+                            float m = 1.0f + g_specBoost;
+                            f[24] = s0 * m; f[25] = s1 * m; f[26] = s2 * m;
+                            if (g_specPower > 0.0f) f[27] = g_specPower;
+                            if (g_specLogs < 6) {
+                                g_specLogs++;
+                                Log("[GP] spec boost x%.3f on (%.3f %.3f %.3f) -> (%.3f %.3f %.3f)\n",
+                                    m, s0, s1, s2, f[24], f[25], f[26]);
+                            }
                         }
                     }
+                    if (g_ambScale > 0.0f) { f[36] *= g_ambScale * g_tintR; f[37] *= g_ambScale; f[38] *= g_ambScale * g_tintB; }
+                    if (g_aeScale > 0.0f) { f[4] *= g_aeScale * g_tintR; f[5] *= g_aeScale; f[6] *= g_aeScale * g_tintB; }
                 }
-                if (g_ambScale > 0.0f) { f[36] *= g_ambScale * g_tintR; f[37] *= g_ambScale; f[38] *= g_ambScale * g_tintB; }
-                if (g_aeScale > 0.0f) { f[4] *= g_aeScale * g_tintR; f[5] *= g_aeScale; f[6] *= g_aeScale * g_tintB; }
             }
             g_maps[i].res = nullptr;
             break;
@@ -1585,8 +1644,12 @@ static void ReloadPresentCfg()
         if (bf) { ParseLightBindFile(bf); fclose(bf); }
     }
     {
+        // Removing GP_light.txt must drop auto mode too, or a stale sun vector
+        // from a previous CB bind keeps driving the contact pass (same class of
+        // bug ReloadExpoCfg already guards against).
         FILE* lf = fopen((ExeDir() + "\\GP_light.txt").c_str(), "r");
         if (lf) { ParseLightFile(lf); fclose(lf); }
+        else if (g_lightAuto) { g_lightAuto = 0; Log("[GP] light cfg: removed -> manual\n"); }
     }
     {
         FILE* df = fopen((ExeDir() + "\\GP_cb_dump.txt").c_str(), "r");
@@ -1803,10 +1866,12 @@ static HRESULT STDMETHODCALLTYPE Hook_Present(IDXGISwapChain* sc, UINT sync, UIN
         }
     }
     if (!g_presentReady) EnsurePresentResources(sc);
-    // Scene stats must run even while the Present contact pass is shelved
-    // (mode 2), because the adaptive AgX controller still needs them.
+    // Scene stats feed the adaptive AgX controller and the adaptive-exposure
+    // range. Both are opt-in, so skip the full-frame readback entirely when
+    // neither is enabled (it costs a GPU->CPU sync every 15 frames).
     g_statsFrame++;
-    if (g_presentReady && g_ctx && g_colorTex && sc && (g_statsFrame % 15) == 0) {
+    const bool wantSceneStats = (g_adaptOn != 0) || (g_expoAdapt != 0);
+    if (wantSceneStats && g_presentReady && g_ctx && g_colorTex && sc && (g_statsFrame % 15) == 0) {
         ID3D11Texture2D* sbb = nullptr;
         if (SUCCEEDED(sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&sbb)) && sbb) {
             g_ctx->CopyResource(g_colorTex, sbb);

@@ -92,6 +92,13 @@ demo/**/*.mp4
 demo/**/*.webm
 demo/_live/
 
+# Built injector copies parked inside demo/ (e.g. d3d11.dll.gp_off) are still
+# binaries: the plain *.dll pattern misses them because of the trailing suffix.
+demo/**/*.dll
+demo/**/*.dll.*
+demo/**/*.dxbc
+
+
 # Regenerable annotate scratch
 extract/cpu_samples/annotated_latest.txt
 

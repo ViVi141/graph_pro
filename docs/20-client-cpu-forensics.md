@@ -1,6 +1,6 @@
 # 20 · 客户端与 DS 的 CPU 归因（2026-10-25）
 
-> 工具与原始数据在仓库外：`C:/Users/74738/gp_re/`（源码、脚本、采样结果）。
+> 工具与源码在本仓库 `tools/gpcpu/`（早期在仓库外 `C:/Users/74738/gp_re/`，现已入库；编译产物仍未入库）。
 > 关联：[11](11-re-findings.md)（World::Simulate）、[13](13-cpu-hotspot.md)（C0–C1）、[16](16-cpu-server-soft-levers.md)、[17](17-ai-wp-cost-table.md)。
 
 ---

@@ -60,3 +60,5 @@
 - 客户端 `MainThrd` 桶为空是正常的：客户端主线程名是 `rvMain`。
 - `.ps1` 里含本机绝对路径（仓库、游戏目录、profiles），换机器需要改。
 - `gpmeasure` 会改写游戏代码序言，重启游戏即恢复。
+- `GP_watch.names.example` 是 2.22 客户端的 RVA→名字表，`docs/20` 的结论靠它才可读；
+  复制为 `GP_watch.names` 放进游戏目录即可（**必须**与目标版本一致，A3 更新后 RVA 会变）。

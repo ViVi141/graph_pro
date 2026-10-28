@@ -10,15 +10,35 @@
 | 层 | 内容 | 关键参数 |
 |---|---|---|
 | 画质配置 | Arma3.cfg / .Arma3Profile | 贴图 4、AF 16、MSAA 8x、SSAO 8、SMAA、阴影 200m、视距 3800 |
-| tonemap | 替换为 ACES v5 | 曝光 0.45、对比 1.12、饱和 1.08 |
+| tonemap | 替换为 **AgX**（`GP_tonemap_agx.dxbc`） | E 0.55 / K 1.40 / S 1.20；ACES 为备选（`GP_replace_aces.txt`） |
 | SSAO resolve | 替换为 smoothstep | smoothstep(0.15, 1.0) |
 | 环境光 | Map/Unmap 常量注入 | 折中 `0.80 0.90 1.00 1.00`（不冷偏） |
-| 曝光钳制 | Map/Unmap · `GP_expo.txt` | size 1696 + **邻槽指纹**；`hi=1.35` |
+| 曝光钳制 | Map/Unmap · `GP_expo.txt` | size 1696 + **邻槽指纹**；`hi=1.35`；见 §曝光实测 |
+| 自适应 AgX | `GP_adapt.txt`（默认**关**） | 开则每 15 帧全幅回读；`c[80].w==1.0` 才接管 |
 | 接触阴影 | Present 旁路 | **已搁置**（`kContactShelved`，强制 mode 2） |
 | 光向 / CB | `GP_light.txt` + dump/hunt | 基建就绪；接触阴影搁置后优先级低 |
 | 材质镜面 | 选择性 boost（默认关） | `GP_spec.txt` = `0 …` |
 
 展示：`demo/` 下 PNG/HTML（大视频不入库）。CPU 无头结论见 [docs/16-cpu-server-soft-levers.md](docs/16-cpu-server-soft-levers.md)。
+
+### 曝光钳制实测注记（2026-10-28 复核）
+
+30 万行历史 `GP_shader.log` 里，指纹通过的 `f150` **99.9% 恒为 1.0**（169,790 / 237,720），
+`exposure CLAMPED` 仅出现 384 次（几乎全是 `1.6399 → 1.35`）。即 `hi=1.35` 在绝大多数场景是**空操作**。
+
+- 机制本身仍成立（`fp=1` + `fp-ok` 日志可验）。
+- 但它只在 AE 短时冲高时生效，不是常驻压暗旋钮。
+- 想确认是否还在工作：把 `GP_expo.txt` 临时改为 `1696 0 1.05`，跑一局看 `CLAMPED` 比例。
+
+---
+
+## 构建 shader 载荷
+
+    powershell -File tools\build_tonemap.ps1
+
+四个产物统一用 **`ps_4_0` 且不带 `/O3`** —— 这个组合能逐位复现已出货的
+`GP_ssao.dxbc`（sha256 `5A2370A56BA8`）与 `GP_tonemap.dxbc`（`8BD7FDE4571B`）。
+改成 `ps_5_0` 会把 SSAO 的采样指令变成 `sample_indexable`/仅 `r0.x`，**静默改变 AO 输出**，勿随意"现代化"。
 
 ---
 
@@ -29,10 +49,11 @@
 | 画质参数 | Arma3.cfg + Profile | ✅ 已打包 |
 | 后处理 shader（tonemap / SSAO resolve） | 代理 + 精确替换 | ✅ 已验证 |
 | 材质常量（环境光） | 拦截 Map/Unmap | ✅ 已验证 |
-| 自动曝光上限 | 拦截 Map/Unmap（cb size 匹配） | ✅ v1 已验收 |
-| 屏幕空间接触阴影 | Present + 深度 + 时域/明度保护 | ⚠️ 产品化已接线，**默认关**（待引擎 A/B 后改 mode 0） |
+| 自动曝光上限 | 拦截 Map/Unmap（cb size 匹配） | ✅ v2 已验收（机制成立；见下方实测注记） |
+| 屏幕空间接触阴影 | Present + 深度 + 时域/明度保护 | ⛔ **已搁置**（`kContactShelved`，强制 mode 2） |
 | 自动光向 / CB 普查 | Unmap dump + sun hunt | ✅ 基建就绪，需三情景 dump 绑定 |
 | 选择性镜面 / 自适应曝光 | Map/Unmap + 帧亮度 | ✅ 可选预设，默认关 |
+| 自适应 AgX（c[80]） | 帧亮度回读 → tonemap | ⚠️ 已接线，默认关（开则每 15 帧全幅回读） |
 | G-buffer 法线 | OMSetRT 全帧普查 | ❌ N1 NO-GO（2026-10-23） |
 | 云前干净深度 / stencil 掩码 | DSV 时间线 | ❌ N2 NO-GO（2026-10-23） |
 | 材质着色器代码 | — | ❌ 编译器在 exe 内 |
@@ -50,7 +71,9 @@
 | `inject/counter/` | CPU：gpsample / gptimer / gpindirect（源码 + ps1；DLL 需本地编译） |
 | `mission/` | SP 截图任务 `GP_Shot2` / `GP_Min`；无头 DS `GP_ServerTest.Altis` |
 | `server/` | DS 配置 + `run-cpu-sample.ps1` / `ab-soft-levers.ps1` |
-| `tools/` | 解包、反汇编、图像对比、server Top 命名、simstep 分析 |
+| `mod/` | `@gpmat`：单材质 rvmat 覆盖（`hbarrier` specular）作 A/B 对照 |
+| `tools/` | 解包、反汇编、图像对比、server Top 命名、simstep 分析；shader 构建见 `build_tonemap.ps1` |
+| `tools/gpcpu/` | CPU 归因工具（gpwatch / gpmeasure / gpgate）；说明见该目录 README |
 | `docs/` | 门禁文档；社区博客见 `docs/blog-arma-optimization.md` |
 | `demo/` | A/B 图/HTML（PNG/MP4 不入库） |
 | `extract/` | 采样笔记与 A/B JSON；大 `.shdc` / 时间戳 dump 不入库 |

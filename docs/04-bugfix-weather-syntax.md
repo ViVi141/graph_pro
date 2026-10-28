@@ -51,7 +51,7 @@ _delay setOvercast _overcast;           // modules_f
 ## 修复
 
 ```sqf
-setDate [2035, 7, 12, 18, 10];
+setDate [2035, 7, 12, 18, 10];   // 当时档位；现已改为 12:00（见 RESULTS）
 0 setOvercast 0.30;
 0 setFog [0.10, 0.02, 90];
 0 setRain 0;
