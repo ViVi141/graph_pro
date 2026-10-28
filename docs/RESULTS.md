@@ -369,6 +369,45 @@ Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天�
 
 ---
 
+## 2026-10-28 超分可行性裁决（DLSS / FSR / XeSS / DLSS 5 通道）
+
+> **本节在当天被自我更正过一次。** 初版写"结构性 NO-GO、换 RTX 也不行"，该说法**有误**并已撤回。
+> 事实：DLSS Super Resolution **官方支持 DX11**（NVIDIA 编程指南原文 *"DirectX11, DirectX 12, or Vulkan based"*），
+> DLSS 5 也有三条 DX11 通道。**技术可行，本机硬件不行。** 完整论证见 [10-dll-options.md §2.13](10-dll-options.md)。
+
+| 命题 | 判定 |
+|---|---|
+| "DLSS 5 有专门兼容 DX11 的版本" | ✅ **成立**（`dx11-bridge` / `Feeder` / `oneclick`） |
+| "网上有 Arma 3 开 DLSS 的视频、画质确实提升" | ✅ **可能成立**（NVIDIA 卡 + ReShade + Feeder，或 Smooth Motion 驱动插帧） |
+| "本机能这么做" | ❌ 无 NVIDIA 显卡，链路起点不存在 |
+| "能解决本机卡顿" | ❌ GPU 非瓶颈，且联机时 ReShade 深度被解绑 |
+
+### 三条 DX11 路线与阻塞点
+
+| 路线 | 机制 | 对本机的阻塞 |
+|---|---|---|
+| `dx11-bridge` | 镜像游戏**已有**的 DLSS 到私有 D3D12 | Arma 无 `nvngx` 导入 → 无水可镜 |
+| `Feeder` | **合成**输入（ReShade 深度 + 光流 MV） | 需 **RTX 50**（*"neural model runs on RTX 50 only"*）+ ReShade 深度 |
+| `OptiScaler` | 仅**替换**已有超分器 | 无入口 |
+
+### 仍然成立的实测反驳
+
+| 事实 | 数据 |
+|---|---|
+| 采样率减半 | FPS 65 → 69，**仅 +6%** |
+| 核显驱动占活跃样本 | **~2%** |
+| 结论 | 超分在此机器是**画质**工具，不是**帧率**工具 |
+
+### 附带查清的诱因（避免重复误判）
+
+- **NVIDIA Smooth Motion**：驱动级 AI 插帧，**任何 DX11/DX12 游戏可用、无需游戏支持**（需 RTX 40/50）。
+  最容易被误认为"在 Arma 3 里开了 DLSS"。
+- **Arma Reforger**：另一款游戏（Enfusion/DX12），原生只有 **FSR 1.0**，同样无 DLSS。
+- **`ARMA 3 Remaster` mod**：宣传的 "Lumen / DLAA" 经社区核查为 ReShade 或 SQF 模拟，
+  *"DLAA is flat out not possible in a mod"*；但**画面确实变好**，+5~10 FPS 靠砍视距。
+
+---
+
 ## 2026-10-24 无头 DS · CPU 软杠杆
 
 场景：`MPMissions\GP_ServerTest.Altis` + `gpsample`（指标用 **exe_fn**，不用 `diag_fps`≈28 常数）。

@@ -1,6 +1,6 @@
 # 10 · 还能用哪些 DLL / 框架（Arma 3 DX11 注入扩展调研）
 
-日期：2026-10-22　状态：桌面调研；本文没有【实测】条目，全部结论都需要在本机复现一次
+日期：2026-10-22（**超分一节 2026-10-28 重写**）　状态：桌面调研为主；除 2.13 的导入表/显卡/采样率数据外，其余结论仍需在本机复现
 
 **证据标记**
 
@@ -16,14 +16,25 @@
 - 测试机是 **Intel 核显**（RESULTS.md 第 1 节）。这一条直接判死 DLSS（需 RTX）和 Nsight（需 NVIDIA 卡），也让 DXR/BVH 路线性价比极低。
 - 私有服、无 BattlEye，允许注入；但**联机状态**会影响 ReShade 的深度可用性（见 2.1）。
 
+> **2026-10-28 修订（两次）**：超分一节已按新证据重写并**自我更正过一次**。
+> 初版把 DLSS 判为"结构上不可能"，该说法**有误**——DLSS SR 官方支持 DX11，DLSS 5 也有 DX11 通道。
+> 正确结论：**技术可行，但本机（Intel 核显）硬件层不可行**，且联机深度与 CPU-bound 两重障碍仍在。
+> 见 [2.13](#213-dlss--fsr--xess--dlss-5-的-dx11-通道2026-10-28-重写)。
+
 ---
 
 ## 0. 先说结论
 
 1. **能立刻加能力、且不和现有代理打架的只有两类**：离线抓帧工具（RenderDoc，半天内回答"世界矩阵/BVH 到底可不可行"）和地址级 hook 库（MinHook/Detours，用来补 `DrawIndexed` / `VSSetConstantBuffers` / `PSSetConstantBuffers`）。
 2. **后处理框架里唯一值得认真评估的是 ReShade**：它和我们的 d3d11.dll 代理不是"二选一"——ReShade 可以装成 dxgi.dll，理论上能分层；但联机时 ReShade 会主动解绑深度语义（源码级证据），依赖它内置深度的效果在私有服会直接失效。
-3. **明确不要碰**：ENB（闭源、无 Arma 版、同为 d3d11.dll）、dgVoodoo2（输入不是 D3D11）、Geo-11（立体 3D 驱动，不提供我们要的能力）、DXVK（换掉整个 D3D11，代理全废）、PIX（只支持 D3D12）、DLSS（无运动矢量 + 核显）。
+3. **明确不要碰**：ENB（闭源、无 Arma 版、同为 d3d11.dll）、dgVoodoo2（输入不是 D3D11）、Geo-11（立体 3D 驱动，不提供我们要的能力）、DXVK（换掉整个 D3D11，代理全废）、PIX（只支持 D3D12）。
 4. **D3D11On12 → D3D12 → DXR 理论可行，但官方原话是"不建议用于复杂 3D 场景"**（CPU 中等开销、显存显著开销），再加上核显没有 RT 硬件，现阶段不值得投入。
+5. **超分：DX11 并非障碍，本机硬件才是**（2026-10-28 两次修订后的结论）：DLSS Super Resolution **官方支持 DX11**；
+   DLSS 5 也有三条 DX11 通道（`dx11-bridge` 需游戏已有 DLSS / `Feeder` 合成输入 / `oneclick` 一键包）。
+   但 Feeder 的神经模型**仅 RTX 50 系可用**，且需 ReShade 深度（联机时被解绑）→ **本机 Intel 核显不可用**。
+   另见：OptiScaler 只能**替换**已有超分器，不能凭空添加（2.13.4）。
+6. **更要紧的是：本机 GPU 不是瓶颈**（半采样只 +6% FPS，核显驱动仅占活跃样本 ~2%）。所以即便做出超分，它在这台机器上是**画质工具，不是帧率工具**。详见 2.13。
+7. **想立刻变顺**：NVIDIA Smooth Motion 是驱动级插帧，**任何 DX11 游戏可用、无需游戏支持**——但需 RTX 40/50，本机无 NVIDIA 卡。
 
 ---
 
@@ -49,10 +60,16 @@
 | Nsight Graphics | 离线抓帧/分析 | 需 NVIDIA GPU | 未测 | 同 RenderDoc + GPU 计数器 | 0（本机不可用） |
 | PIX | 离线抓帧 | 不能（D3D12 only） | — | — | 0 |
 | 3Dmigoto | DX11 注入/dump 框架（d3d11.dll） | 未知（2014 年记录为不可用） | 硬冲突（d3d11.dll） | 逐 draw dump VB/IB/CB/depth、shader hunting | 1–2 人日 |
-| DLSS | 超分 | 不能（无 MV + 需 RTX） | 可共存，但要改渲染管线 | 画质/帧率 | 30+ 人日 |
-| FSR 1 / NVIDIA NIS | 空间超分 | 能 | 无（塞进 Present pass 即可） | 低采样率下救画质/提帧 | 2–4 人日 |
+| OptiScaler | 超分中间件（dxgi.dll / d3d11.dll 代理） | **不能**：只能替换**已有**超分器，Arma 无入口 | 同名代理会冲突 | 无（见 2.13.4） | 0 |
+| DLSS 2+（原生） | 时序超分 | **API 支持 DX11**，但需游戏自行调用 NGX | 可共存，但要改渲染管线 | 画质/帧率 | 30+ 人日 |
+| **DLSS 5 · dx11-bridge** | 把游戏已有 DLSS 镜像到 D3D12 | 需游戏**本来有** DLSS → Arma 无 | 需 ReShade + add-on | 神经渲染 | — （不可用） |
+| **DLSS 5 · Feeder** | 合成输入（ReShade 深度 + 光流 MV） | **可以**（游戏无需 DLSS），但需 **NVIDIA RTX 50** | 与 d3d11 代理争同一层 | DLSS 5 神经渲染 | 待硬件具备再评估 |
+| DLSS 帧生成 | 插帧（D3D12 + RTX40） | 不能（Arma 是纯 D3D11） | 需 D3D11On12 | 绕过 CPU 瓶颈 | 40+ 人日 |
+| **NVIDIA Smooth Motion** | **驱动级**插帧 | ✅ **任何 DX11/DX12 游戏**，无需游戏支持 | 无 | 帧数约翻倍，增伪影 | 0（需 RTX 40/50） |
+| FSR 1 / NVIDIA NIS | **空间**超分 | 能，但**收益≈0**：游戏自带等效缩放（`renderWidth`） | 无（但**不能**塞 Present，见 2.13.8） | 低采样率下救画质 | 3–5 人日 |
 | FSR 2/3 | 时序超分/插帧 | 不能（缺 MV 和抖动） | 需改管线 | 更好的超分/插帧 | 10–20 人日 |
-| XeSS | 超分 | 不能（DX11 要求 Arc；且缺 MV） | 需改管线 | 超分 | 5–10 人日 |
+| XeSS | 超分 | 不能（DX11 原生仅 Arc；且缺 MV） | 需改管线 | 超分 | 5–10 人日 |
+| 外部插帧（LSFG） | 全屏后处理插帧 | 能（进程外，不注入） | 无 | 帧数翻倍但增延迟 | 0（现成软件） |
 
 ---
 
@@ -152,31 +169,245 @@
 - **能带来**：运行时逐 draw 的 VB/IB/CB/depth dump、shader hash 表、常量缓冲可视化——正好补上 RenderDoc"只能看一帧"的短板，用来确认"world matrix 是每帧变的还是每物体变的"。
 - **工作量**：1–2 人日（含折腾 ini 和兼容性）。
 
-### 2.13 DLSS
+### 2.13 DLSS / FSR / XeSS / DLSS 5 的 DX11 通道（2026-10-28 重写）
 
-- **【事实】** DLSS 2+ 的输入是 color + depth + motion vectors + jitter，必须在 UI 合成之前、按内部渲染分辨率执行；DLSS 3 帧生成要求 D3D12。
-- **Arma**：没有运动矢量；可以用"深度 + 上一帧 view-projection"生成相机 MV（社区 mod 的常见做法），但需要矩阵，而且动态物体/植被会拖影。
-- **硬件**：需要 NVIDIA RTX；**本机 Intel 核显直接排除**。
-- **结论**：30+ 人日，收益不确定，不做。
+> **本节曾在同一天被修正过一次，保留过程以便对照：**
+> 初版结论是"DLSS 5 要 D3D12，Arma 3 结构上不可能"——**这条是错的**。
+> 复核后确认：DLSS Super Resolution 官方支持 DX11，且 DLSS 5 存在多条 DX11 通道（见 2.13.2）。
+> 正确结论应当是：**技术上可行，但对本机（Intel 核显）硬件层不可行**，且仍有联机深度与 CPU-bound 两重障碍。
 
-### 2.14 FSR 1 / NVIDIA NIS（唯一现实可用的超分）
+**修正后的结论**
 
-- **【事实】** FSR 1 = EASU（空间上采样）+ RCAS（锐化），**只需要颜色**，不依赖深度/MV/抖动；NVIDIA Image Scaling SDK 提供 DX11/DX12/Vulkan 的 compute shader（NVIDIA 官方 README 明确写了 DX11 可集成）。
-- **怎么接**：塞进我们的 Present pass；前提是游戏以 **Sampling < 100%** 渲染（Arma 3 的 Sampling 就是渲染分辨率百分比），再上采样到窗口分辨率。
-- **收益**：核显上帧率提升明显，代价是清晰度；**不解决光照问题**。
-- **冲突**：无（同一 pass 里多一个 draw）。**工作量 2–4 人日**，风险低。
+| 命题 | 判定 |
+|---|---|
+| "DLSS 5 有专门兼容 DX11 的版本" | ✅ **成立**（bridge / Feeder / oneclick 三条路线） |
+| "网上有 Arma 3 开 DLSS 的演示" | ✅ **可能成立**（NVIDIA 卡 + ReShade + Feeder + 神经模型） |
+| "画质确实提升" | ✅ **成立**（DLAA 抗锯齿收益真实可见） |
+| "本机能这么做" | ❌ **不成立**：无 NVIDIA 显卡，链路起点不存在 |
+| "能解决本机卡顿" | ❌ **不成立**：GPU 非瓶颈（2.13.6），且联机时 ReShade 深度被解绑 |
+
+#### 2.13.1 硬事实核对（【实测】，本机 + 本仓库）
+
+| 检查项 | 结果 | 命令/依据 |
+|---|---|---|
+| `arma3_x64.exe` 导入的 DLL | 仅 `D3DCOMPILER_43.dll`、`d3d11.dll`(2 函数)、`dxgi.dll`(CreateDXGIFactory) | `python tools/pe_imports.py <exe>` |
+| 游戏目录是否有 `nvngx*` / `dlss*` / `ffx*` / `xe*` | **0 个** | `Get-ChildItem -Filter *.dll` |
+| 游戏是否导入 `nvngx`/`NVAPI` | **否** | 同上导入表 |
+| 显示适配器 | Intel(R) Graphics，驱动 32.0.101.9150（Ultra 5 336H 核显） | `Win32_VideoController` |
+| 内部渲染分辨率键 | `renderWidth=1920` / `renderHeight=1080`（`Arma3.cfg`） | 游戏自带 Sampling 即改这两个值 |
+
+**关键推论**：游戏**从未有过任何超分器的调用点**。这一点决定了「原生路线」全部不通，
+但**不**排除「用外部工具合成输入」的路线（见 2.13.2）。
+
+#### 2.13.2 DLSS 5 的 DX11 通道（三条，机制各不相同）
+
+**先纠正一个常见误解**：DLSS Super Resolution **原生就支持 DX11**。
+NVIDIA 官方编程指南的 Rendering Engine Requirements 首条即：
+
+> *"DirectX11, DirectX 12, or Vulkan based"*
+
+所以"DX11 游戏不能跑 DLSS"本身不成立。真正的问题是**谁提供输入**。三条路线：
+
+| 路线 | 代表项目 | 机制 | 前置条件 |
+|---|---|---|---|
+| **A. D3D11 bridge** | `NIGos/dlss5-bridge` | 把游戏**已有**的 DLSS 调用（Color/Depth/MV）镜像到私有 D3D12 设备，算完拷回 | 游戏**本来就有 DLSS** |
+| **B. 合成输入（Feeder）** | `jlrouzies-fr/DLSS5-Feeder` | **自己伪造** DLSS 输入：ReShade 深度 + 光流估算的 MV，跑真实 DLSS evaluate，再让 DLSS 5 神经插件挂上去 | 游戏可以**没有** DLSS；但需 ReShade 抓得到深度 |
+| **C. 一键包** | `faisalkindi/DLSS5oneclick` | 自动判断有无原生 DLSS，有则走 A、无则走 B | 同上；且其描述的模型为 **leaked build** |
+
+**路线 A 对本项目无效**，因为 bridge README 写得很直白：
+
+> *"The bridge is only for DX11 games that **already** have their own DLSS"*
+
+Arma 3 的导入表里没有 `nvngx`，**没有可镜像的调用**。
+
+**路线 B 才是"网上 Arma 3 开 DLSS 视频"最可能的解释**，它的数据流是：
+
+    game frame → ReShade effects → [光流算出的 MV] → DLSS5_Feed
+                    ↓
+            ReShade 深度 + Optical Flow MV
+                    ↓
+               真实 DLSS evaluate → DLSS 5 神经渲染 → 写回帧
+
+关键点：**它依赖 ReShade 的 Generic Depth**，和我们「在 `OMSetRenderTargets` 里直接抓游戏 DSV、零拷贝」是两条完全不同的深度获取路径。
+
+#### 2.13.3 为什么这些通道对本机仍然不可用
+
+##### (1) 硬件：链路起点就不存在
+
+Feeder 的 Requirements 原文：
+
+> **"The neural model runs on RTX 50 only."** NVIDIA 签名的 `nvngx_dlssnr.dll` 310.8.0
+> *"create the neural feature on RTX 50-series GPUs only. On an RTX 20/30/40 **DLSS still runs but the neural pass does not**"*
+
+Requirements 表首项还写着：*"the game must be rendering on the **NVIDIA GPU**"*。
+
+本机：`Intel(R) Graphics`，驱动 `32.0.101.9150`（Ultra 5 336H 核显）。
+**没有 NVIDIA 显卡 → A/B/C 三条路线的起点都不存在。**
+
+##### (2) 联机：Feeder 依赖的 ReShade 深度会被解绑
+
+Feeder 要求 *"ReShade 6.8+ with add-on support, **Generic Depth add-on enabled** and picking the scene depth"*。
+
+而 2.1 已记录 ReShade 的联机行为（源码 `runtime.cpp` L952–981）：`addon_enabled = traffic < 10;`
+私有服同样是联机 → **ReShade 会主动解绑深度语义**，Feeder 拿不到可靠深度。
+
+##### (3) 冲突：与我们现有的 d3d11 代理争同一层
+
+ReShade 的 D3D11 安装方式就是**放一个本地代理 DLL**（`dxgi.dll` / `d3d11.dll`）。
+我们的 `d3d11.dll` 已经占位，接入 Feeder 等于重排整个注入链（参见 2.1 的分层分析）。
+
+##### (4) 供给与合规：模型不是公开分发的
+
+`nvngx_dlssnr.dll` 与 neural consumer（`Deep Fried Chicken` / `renodx-dlss5.addon64`）
+**均不随包提供**，需从 Discord 获取；`DLSS5oneclick` 的描述直言其模型为 **"leaked DLSS 5 neural-rendering build"**。
+对商业技术的泄漏内部版本做逆向分发，法律与稳定性风险自负。
+
+##### (5) 即便跑通，也不解决本机瓶颈
+
+见 2.13.6：GPU 不是瓶颈，超分在此机器上是**画质**工具。
+
+#### 2.13.4 OptiScaler 为什么单独帮不上忙（与上文的区别）
+
+OptiScaler 与 Feeder 是**不同的东西**，容易混淆：
+
+- **【事实】** OptiScaler 定义是"replace upscalers in games that **already support** DLSS2+/FSR2+/XeSS"，
+  机制 **Inputs → OptiScaler → Outputs**：拦截游戏**已有**的超分器调用转发到别的后端。
+- **【事实】** 对零原生支持的游戏，它需要一个**按游戏定制的 mod 提供输入**。官方兼容表每个案例都有前置依赖：
+
+  | 游戏 | 前置 mod |
+  |---|---|
+  | 荒野大镖客 2 / 孤岛惊魂 5 / 羞辱 2 | Luma Framework |
+  | 生化危机 2/3/4/7/8、鬼泣 5 | REFramework + PDUpscaler |
+  | 只狼 | SekiroTSR |
+  | 艾尔登法环 | ERSS-FG |
+
+- **【事实】** OptiScaler 作者 Discussion #90：*"A general solution TAA like OptiScaler is not possible for these games... you can use **spatial upscalers like Magpie** for this purpose."*
+- **与 Feeder 的分工**：Feeder 自己造输入（不需要 OptiScaler）；OptiScaler 只能换后端。
+  Feeder README 也明说：*"Do I need the DLSS 5 DX11 bridge? **No.**"* —— 反之亦然，**不要同时跑**。
+- **对 Arma 3**：无 Luma/REFramework 类 mod 生态（Arma 用 SQF，不是通用引擎插件模型），
+  "下载 OptiScaler 改名 dxgi.dll 就能强开" **不成立**。
+
+#### 2.13.5 时序超分缺什么（逐项，针对"自己实现"路线）
+
+DLSS 2+ / FSR 2+ / XeSS 的输入：**color + depth + motion vectors + jitter（+ TAA 历史）**，且在 UI 合成前、按内部渲染分辨率执行。
+
+| 要求 | Arma 现状 | 缺口 |
+|---|---|---|
+| RTX / XMX 硬件 | Intel 核显 | 硬性不满足（DLSS）；XeSS DX11 要 Arc |
+| Motion vectors | 引擎不产出 | 需伪造：光流（Feeder 方案）或"深度 + 上帧 VP"；植被/动态物体必拖影 |
+| Jitter（子像素抖动） | 无 | 需自加，会破坏现有成像标定（见 RESULTS 色调定稿） |
+| TAA 历史缓冲 | 无（`PPAA` 只有 FXAA/SMAA，见 docs/08） | 时序超分没有历史可累积 |
+| 插入位置 | UI 在引擎内合成 | 必须在 tonemap 前插入 |
+
+注意：External 工具（Feeder）**能绕过前四项**（它自造 MV、跑在 ReShade 链里），
+所以本表只约束"我们自己动手实现"的路线，不是否定 2.13.2。
+
+**外部工具自承的代价**（Feeder README 原文）：
+> *"The substitute is a real DLSS feature fed approximated inputs, and it shows: **text softens and dense foliage smears.**"*
+
+这对 Arma 是硬伤：Arma 的核心画面就是**植被与远景步兵**，恰好是"dense foliage smears"最明显的地方。
+
+#### 2.13.6 决定性反驳：这台机器不缺 GPU 时间（【实测】）
+
+超分省下的是 **GPU** 时间。本仓库已有两处实测说明它不是瓶颈：
+
+| 证据 | 数据 | 出处 |
+|---|---|---|
+| 采样率减半（1080p 窗口不变） | FPS 65 → 69，**仅 +6%** | `docs/blog-arma-optimization.md` §二 |
+| 核显驱动占活跃样本 | **~2%**（全样本 0.68%） | `docs/20-client-cpu-forensics.md` §4.1 |
+| 主线程/渲染线程热点 | 命令缓冲处理 + CmdExecute | 同上 §4.2 |
+
+> **所以在本机，超分最多是"画质工具"，不是"帧率工具"。**
+> 别期待从 65 帧到 90 帧——那只会在 GPU-bound 的机器上发生。
+
+#### 2.13.7 BI 官方裁决
+
+- **【事实】** feedback.bistudio.com **T167577**（"DLSS 3.0 for Arma 3?"），dedmen 于 2024-04-23 关闭并注明：
+  > *"Not possible. **FSR 1 might be the maximum doable.**"*
+
+  理由链：DLSS 只在 GPU-bound 时有用，而 Arma 通常 CPU-bound；且引擎缺原生输入。
+  **注意**：这是"官方不会做"，不等于"民间做不到"——2.13.2 的 Feeder 正是民间绕过原生支持的方案。
+
+#### 2.13.8 插入点陷阱（若仍要做 FSR 1）
+
+Arma 的 Sampling 是**引擎内部**降分辨率渲染、再自行拉伸到 backbuffer 的。因此：
+
+    Present 钩子拿到的是「已放大过的 1920x1080 backbuffer」
+
+在 Present 上做 FSR = 对放大过的图再放大一次（最多等于锐化）。正确位置只有：
+
+1. **替换游戏自己的 upscale pass**（与现替换 tonemap 同手法：`CreatePixelShader` 按 size+crc / 反汇编指纹匹配），
+   并确认其输入是低分辨率 SRV。我们已有 `CreatePixelShader` 替换 + 全屏 RT 普查基建，**估 3–5 人日**。
+2. 让游戏渲染到全分辨率 RT 再由我们降+超 —— 更慢，不划算。
+
+#### 2.13.9 若要真正绕过 CPU 瓶颈
+
+DLSS 3 / FSR 3 **帧生成**是唯一对症的方向（在 GPU 上插帧，绕过 CPU 提交）。
+但 DLSS-FG 要 D3D12 + RTX40；Arma 是纯 D3D11 → 需 `D3D11On12`（20–40 人日，且微软官方"不建议用于复杂 3D 场景"）。
+
+现实替代：**进程外插帧**，不注入、不改引擎，任何游戏可用。两种现成方案：
+
+| 方案 | 硬件要求 | 说明 |
+|---|---|---|
+| **NVIDIA Smooth Motion** | RTX 40/50 | 驱动级 AI 插帧，**不需要游戏支持任何超分**；NVIDIA App → 程序设置 → 驱动设置开启 |
+| **Lossless Scaling（LSFG）** | 无卡限制 | 进程外，任何游戏可用；延迟与伪影代价更高 |
+
+> ⚠️ **Smooth Motion 极易被误认为"在 Arma 3 里开了 DLSS"**：官方文档原文 *"has no requirement,
+> it can be enabled for any title without native DLSS support"*。游戏内不会有任何 DLSS 菜单，
+> 但帧数会明显上升，UI/字幕可能出现畸变（统一插值而非选择性插值）。
+> 已知与 Feeder 类工具冲突：DX11/12 自 0.11.0-beta.2 起可共存，**Vulkan 必须关闭**。
+
+#### 2.13.10 如何识别"网上开 DLSS 的 Arma 视频"（判据）
+
+这是本节最实用的部分——下次看到类似视频，按顺序排除即可：
+
+| # | 看什么 | 结论 |
+|---|---|---|
+| 1 | 标题/描述是否写 **Reforger** | 那是另一款游戏（Enfusion / DX12），原生有 **FSR 1.0**，但同样无 DLSS |
+| 2 | 游戏设置菜单是否有 DLSS/FSR 项 | **Arma 3 永远没有**（`Arma3.cfg` 全部约 40 个键里无任何超分项） |
+| 3 | 是否有 NVIDIA App 的 Alt+R 叠加层显示 **Smooth Motion** | 驱动插帧（2.13.9），不是超分 |
+| 4 | 是否展示 mod 列表含 **ReShade / Remaster / RayFX** | 后处理调色，不是超分 |
+| 5 | 是否演示了"替换文件"（`dxgi.dll`、`nvngx_*.dll`） | 可能真是 2.13.2 的 Feeder/Bridge 路线（需 NVIDIA 卡） |
+| 6 | **帧数是否明显上升** | 若几乎不变 → 一定不是超分，是调色 |
+
+**反向判据**（最硬）：超分的定义价值是"**帧数上升 + 画质接近原生**"。只变好看不变快 = 后处理。
+
+**已知的"标注通胀"案例**（社区已核查）：
+
+- **`ARMA 3 Remaster`**（Steam 创意工坊）：宣传 *"a new lighting system based on **Lumen**"* 与 *"**DLAA**: ... I recreated something similar through scripting"*。
+  实际：前者是 ReShade 的 Lumen 或 SQF 模拟；后者经社区判定 *"**flat out not possible in a mod**"*；
+  宣称的 +5~10 FPS 主要来自**砍视距**；另有 LLM 改名复用 blastcore / TPW 脚本的争议。
+  **但它的画面确实变好看了**——所以"画质提升"是真的，"技术标签"是假的。
+- **`RayFX`**（付费）：社区定性"就是个 ReShade 预设"，收费违反 BI 政策。
+
+#### 2.13.11 建议动作（零代码先验证）
+
+1. 采样率设 **50% / 75%**，用 **Magpie**（OptiScaler 作者推荐的通用 FSR1 方案）或 Lossless Scaling 外部缩放；
+2. 三帧对比：游戏自带缩放 / FSR1 缩放 / 原生 100%，同时记帧率；
+3. 判据：FSR1 明显好于自带缩放 → 才值得做 pass 替换（画质收益真实）；帧率几乎不动 → 确认 CPU-bound，此路仅作画质。
+
+**工作量**：FSR1 pass 替换 3–5 人日（画质收益不确定）。
+**DLSS 5 外部通道**：本机硬件不支持，不评估；若将来换 NVIDIA RTX 50 系机器，按 2.13.2 路线 B 试，但需接受"植被拖影"。
+
+### 2.14 FSR 1 / NVIDIA NIS（唯一现实可用的超分，但收益是画质而非帧率）
+
+- **【事实】** FSR 1 = EASU（空间上采样）+ RCAS（锐化），**只需要颜色**，不依赖深度/MV/抖动；NVIDIA Image Scaling SDK 提供 DX11/DX12/Vulkan 的 compute shader。
+- **怎么接**：**不能**直接塞进 Present pass —— 见 2.13.8，Presentation 拿到的已是放大过的 backbuffer。
+  必须先**替换游戏自己的 upscale pass**，或确认游戏在 `<100%` Sampling 时确实留了一个可接的低分辨率输入。
+- **收益**：**画质**（同样 50% 采样下比双线性好看）；**帧率收益≈0**，本机实测半采样只 +6%（2.13.6）。
+- **冲突**：无（同一 pass 里多一个 draw）。**工作量 3–5 人日**，风险低但回报仅限画质。
 
 ### 2.15 FSR 2/3
 
 - **【事实】** FSR 2 需要 color + depth + motion vectors + jitter + 反应掩码/透明度掩码；官方示例后端是 D3D12/Vulkan（DX11 要自己移植后端）。
-- **Arma**：缺 MV、缺 jitter → 不改造引擎接不进去；改造量约等于自己写一套 TAA。
-- **结论**：10–20 人日，不建议。
+- **Arma**：缺 MV、缺 jitter、缺 TAA 历史 → 接不进去；改造量约等于自己写一套 TAA。
+- **结论**：10–20 人日，不建议。**FSR 3 帧生成**另需时序输入，同样不通（进程外插帧是另一条路，见 2.13.9）。
 
 ### 2.16 XeSS
 
-- **【事实】** XeSS-SR 需要 jitter + 运动矢量 + 深度；官方 Requirements 写得很清楚：**DirectX11 需要 Intel Arc 或更新**；DirectX12 才支持 Iris Xe 及其他 SM 6.4 + DP4a 的 GPU。
-- **本机**：DX11 + 核显 → **不支持**；而且同样缺 MV。
-- **结论**：5–10 人日，硬件不允许，不做。
+- **【事实】** XeSS-SR 需要 jitter + 运动矢量 + 深度；官方 Requirements：**DirectX11 需要 Intel Arc 或更新**；DirectX12 才支持 Iris Xe 及其他 SM 6.4 + DP4a 的 GPU。
+- **本机**：DX11 + 核显 → **不支持**；而且同样缺 MV/jitter/TAA。
+- **结论**：5–10 人日，硬件与输入都不允许，不做。
 
 ---
 
@@ -245,7 +476,8 @@
 
 理由：RenderDoc 只能看一帧，3Dmigoto 能逐 draw dump `dump_cb / dump_vb / dump_ib / dump_depth`，还能做 shader hunting——用来确认"矩阵是每帧变还是每物体变""shader 变体到底有多少"。代价是它占 d3d11.dll，必须把我们的代理临时移走，所以放在第三位、当一次性研究工具用。
 
-> 备选：如果目标不是 BVH 而是"立刻好看/更流畅"，跳过上面三条，直接在 Present pass 里接 **FSR 1 / NIS**（2–4 人日）——这是唯一在 Intel 核显 + 无 MV 条件下确定能落地的画质/性能方案。
+> 备选：如果目标不是 BVH 而是"立刻好看"，跳过上面三条，**替换游戏自己的 upscale pass** 接 **FSR 1 / NIS**（3–5 人日）。
+> 注意两点：① 不能在 Present 上做（那已是放大后的图，见 2.13.8）；② 它是**画质**方案，帧率收益≈0（半采样仅 +6%，见 2.13.6）。
 
 ---
 
@@ -272,6 +504,19 @@
 - FSR 2.2.1 README（输入资源/运动矢量）：https://github.com/GPUOpen-Effects/FidelityFX-FSR2
 - DXVK README（D3D8/9/10/11 → Vulkan）：https://github.com/doitsujin/dxvk
 - ENB 官网自述（通用版/专属版、闭源、效果列表）：https://www.enbdev.com/
+- **OptiScaler README（"already support DLSS2+/FSR2+/XeSS"；Inputs→Outputs 机制）**：https://github.com/optiscaler/OptiScaler
+- **OptiScaler Discussion #90（作者：通用 TAA 方案不可能，建议 Magpie 空间超分）**：https://github.com/optiscaler/OptiScaler/discussions/90
+- **OptiScaler 兼容表（无原生支持的游戏均需 Luma/REFramework 等前置 mod）**：https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List
+- **BI 官方裁决 T167577（2024-04-23 dedmen：Not possible. FSR 1 might be the maximum doable）**：https://feedback.bistudio.com/T167577
+- 社区 FSR1 讨论与 Magpie 实践（BI 论坛）：https://forums.bohemia.net/forums/topic/235192-arma-3-with-fidelityfx-super-resolution/
+- **NVIDIA DLSS 编程指南（"DirectX11, DirectX 12, or Vulkan based"；MV/jitter/深度要求）**：https://github.com/NVIDIA/DLSS/blob/main/doc/DLSS_Programming_Guide_Release.pdf
+- **DLSS 5 DX11 bridge（仅限已有 DLSS 的 DX11 游戏）**：https://github.com/NIGos/dlss5-dx11-bridge
+- **DLSS5-Feeder（合成输入；"neural model runs on RTX 50 only"；"dense foliage smears"）**：https://github.com/jlrouzies-fr/DLSS5-Feeder
+- **DLSS5oneclick（描述含 "leaked DLSS 5 neural-rendering build"）**：https://github.com/faisalkindi/DLSS5oneclick
+- **NVIDIA Smooth Motion（驱动级插帧，"any title without native DLSS support"）**：https://www.nvidia.com/en-us/geforce/news/gfecnt/20258/nvidia-app-global-dlss-overrides-rtx-40-series-smooth-motion/
+- Smooth Motion 实测与伪影代价（TechSpot）：https://www.techspot.com/news/106625-nvidia-answer-amd-fluid-motion-frames-works-all.html
+- Arma Reforger 视频设置（原生仅 FSR 1.0）：https://community.bistudio.com/wiki/Arma_Reforger:Video_Settings
+- ARMA 3 Remaster mod 的"Lumen/DLAA"争议（社区核查）：https://www.reddit.com/r/arma/comments/1lxhto8/a_mod_maker_disappeared_from_the_workshop/
 
 ---
 
@@ -282,7 +527,10 @@
 3. ReShade 装 dxgi.dll + 我们的代理：打印 Present 调用链，确认谁在外层；进私有服看深度是否被解绑。
 4. 3Dmigoto 单独构建：确认 2.22 能否加载、shader 反编译是否还报错、`analyse_options = dump_cb dump_vb dump_ib` 能否出文件。
 5. MinHook 挂 `DrawIndexed`：统计每帧 draw 数、unique IB 数、VS cb 绑定分布。
-6. FSR 1 / NIS 在 Present pass 的原型：Sampling 70% + 上采样，测帧率和清晰度。
+6. FSR 1 / NIS 原型：**先零代码验证**（采样 50%/75% + Magpie/LS 外部缩放，三帧对比）；
+   若画质收益确认，再定位游戏 upscale pass 的 DXBC 指纹做替换。不要在 Present 上做。
+7. 超分方向的**前置裁决**已完成（2026-10-28）：DLSS/FSR2+/XeSS/OptiScaler 全部 NO-GO，
+   只剩 FSR 1 且仅画质收益。见 2.13。
 ---
 
 ## 实测补充（2026-10-22 05:00，本机现场数据，非检索）

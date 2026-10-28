@@ -59,6 +59,7 @@
 | 材质着色器代码 | — | ❌ 编译器在 exe 内 |
 | 第三方 AO 库（GFSDK） | 代理 DLL | ❌ 尝试后崩溃，已回滚 |
 | 模型 / 贴图 / 植被 / 地形 | — | ❌ 需改资源 |
+| **超分（DLSS / FSR2+ / XeSS / OptiScaler）** | — | ⚠️ **DX11 不是障碍，本机硬件是**：DLSS SR 官方支持 DX11，DLSS 5 有 Feeder 等 DX11 通道，但神经模型仅 **RTX 50** 可用；本机 Intel 核显不可用。详见 [docs/10 §2.13](docs/10-dll-options.md) |
 
 ---
 
