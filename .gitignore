@@ -132,3 +132,10 @@ config/backups/
 *.zip
 *.7z
 *.tar.gz
+
+# --- Third-party downloads / unpacked workshop / packaged dist ---
+dist/
+tools/dxvk/dxvk-*/
+inject/malloc/src/
+extract/ab_graphics/prof/
+mission/GP_YAAB_Auto.Altis/

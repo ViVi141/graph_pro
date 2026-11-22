@@ -1,0 +1,248 @@
+# GP_prof Active-CPU + Call-Stack Report
+# ticks=2388 active_samples=21875 idle_skipped=146169 main_tid=24028 main_samples=2375
+
+## TOP THREADS (by real CPU ms)
+# tid  cpu_ms  active_samples  idle_skipped  role
+ 24028   115687.5 ms    2375 active      13 idle  MAIN
+ 32800    74875.0 ms    2072 active     316 idle  worker
+  8616    26640.6 ms    1273 active    1115 idle  worker
+ 41044    16625.0 ms     901 active    1487 idle  worker
+ 18136    16593.8 ms     902 active    1486 idle  worker
+ 41788    16546.9 ms     897 active    1491 idle  worker
+ 14740    16312.5 ms     894 active    1494 idle  worker
+ 36036    16296.9 ms     885 active    1503 idle  worker
+ 39940    16171.9 ms     884 active    1504 idle  worker
+ 14372    16156.2 ms     875 active    1513 idle  worker
+ 20292    16140.6 ms     881 active    1507 idle  worker
+  5772    16125.0 ms     877 active    1511 idle  worker
+  5792    16109.4 ms     866 active    1522 idle  worker
+ 39000    16078.1 ms     871 active    1517 idle  worker
+ 36256    16078.1 ms     873 active    1515 idle  worker
+ 19788    16078.1 ms     883 active    1505 idle  worker
+
+## MODULES (ACTIVE CPU ONLY - ZERO WAIT BIAS)
+# excl_main%  incl_main%  excl_all%  incl_all%  excl_m  incl_m  module
+ 73.26%      96.76%      13.39%     87.89%     1740    2298   Arma3_x64.exe
+ 20.25%      83.87%      83.04%     97.29%      481    1992   ntdll.dll
+  3.07%       3.83%       0.69%      0.96%       73      91   PhysX_64.dll
+  1.68%       1.94%       0.30%      0.32%       40      46   gp_mimalloc_x64.dll
+  0.67%       2.36%       0.57%      1.26%       16      56   d3d11.dll
+  0.42%       0.42%       0.11%      0.11%       10      10   win32u.dll
+  0.17%       0.67%       0.03%      0.22%        4      16   PhysXFoundation_64.dll
+  0.17%       0.17%       0.02%      0.02%        4       4   RTDynamics_64.dll
+  0.08%       1.77%       1.63%     10.19%        2      42   amdxx64.dll
+  0.08%      83.79%       0.02%     86.96%        2    1990   KERNELBASE.dll
+  0.04%       0.04%       0.02%      0.02%        1       1   d3dx10_43.dll
+  0.04%       1.56%       0.00%      0.17%        1      37   gameoverlayrenderer64.dll
+  0.04%       0.08%       0.00%      0.01%        1       2   steamclient64.dll
+  0.00%       0.00%       0.09%      0.09%        0       0   PhysXCommon_64.dll
+  0.00%       0.00%       0.08%      1.90%        0       0   xaudio2_9.DLL
+  0.00%       0.00%       0.00%     87.21%        0       0   KERNEL32.DLL
+  0.00%       0.04%       0.00%      0.01%        0       1   dxcore.dll
+  0.00%       1.73%       0.00%      0.19%        0      41   dxgi.dll
+  0.00%       0.42%       0.00%      0.05%        0      10   steam_api64.dll
+  0.00%       0.08%       0.00%      0.01%        0       2   USER32.dll
+  0.00%       0.04%       0.00%      0.00%        0       1   tier0_s64.dll
+  0.00%       0.00%       0.00%      0.00%        0       0   AUDIOSES.DLL
+
+## MAIN THREAD INCLUSIVE TOP (Arma3_x64.exe call-stack)
+# incl_main%  excl_main%  incl_all%  rva         size
+ 81.89%       0.04%       8.89%    0x011527E0   11093   ;; KNOWN:World::Simulate ; STR:Array index out of range | uVSs | smt
+ 81.60%       0.00%       8.86%    0x017751BD     514   ;; STR:Limit FPS %d
+ 81.35%       0.00%       8.83%    0x01773210    1100
+ 81.26%       0.00%       8.82%    0x01768422      85
+ 80.76%       0.04%       8.77%    0x017799C0   13485   ;; STR:CoInitialize MT returned error %X: %s | Main | Main Thread
+ 79.79%       0.00%       8.66%    0x0177CE70      67
+ 18.19%       0.04%       1.97%    0x01155340    4604   ;; STR:mtVehS | {error} Strange - simulation started twice in a 
+ 15.45%       0.08%       1.79%    0x00385BDB     241
+ 12.76%       0.00%       1.44%    0x00382E90     418
+ 11.71%       0.00%       1.27%    0x0161127C      87
+ 11.54%       0.00%       1.25%    0x016C99AD     116
+ 11.37%       0.00%       1.23%    0x016C7AE0     101   ;; STR:endHL
+ 10.48%       0.29%       1.14%    0x0113C911    1962
+  9.94%       0.59%       1.08%    0x01250473    6434   ;; STR:tcsb | tcih | Error: can't resize AutoArray to negative size!
+  9.85%       0.00%       1.07%    0x01699A30     194
+  9.81%       9.26%       1.07%    0x0169B288     462   ;; STR:Internal error: Rendering command buffer to smal
+  8.38%       1.14%       0.91%    0x0113E080    1684
+  7.71%       0.04%       0.84%    0x01159340     297
+  7.66%       0.04%       0.83%    0x011594A5     171
+  7.66%       0.00%       0.83%    0x0115B980     296
+  6.78%       0.00%       0.74%    0x011235D7      63
+  6.74%       0.04%       0.73%    0x0112292F     496
+  6.02%       0.04%       0.65%    0x016107C0    2700
+  6.02%       0.00%       0.65%    0x0160F37A     105
+  5.39%       0.00%       0.59%    0x00E77250     249
+  5.22%       0.00%       0.57%    0x003859C0     154
+  4.21%       0.04%       4.31%    0x00384370     177
+  4.21%       0.00%       0.46%    0x0162CFA0     773
+  4.08%       0.00%       0.44%    0x0123BCA4     166
+  3.75%       0.00%       0.41%    0x0124A54B     510   ;; STR:pass1ONOrig | pass1ONBlend | pass1OFOverdrawOrig
+  3.62%       0.00%       3.01%    0x003833D0     173
+  3.54%       0.00%       0.38%    0x0124E12C      42
+  3.33%       0.00%       0.36%    0x01241619     594
+  3.28%       0.00%       0.36%    0x0125B140     164
+  3.12%       2.23%       0.34%    0x01264CFB    1347
+  2.74%       1.85%       0.30%    0x0125BA20    1940
+  2.65%       0.00%       0.29%    0x0124D800     272   ;; STR:pass1OFOrig | pass1ONBlend | pass1AF
+  2.36%       0.00%       0.26%    0x0113A800     181
+  2.36%       0.00%       0.26%    0x0162C690     108
+  2.11%       0.00%       0.23%    0x00E776E3     173
+  2.06%       0.00%       0.22%    0x016C98D8     157
+  2.06%       0.00%       0.38%    0x00384D00    1304
+  1.98%       0.04%       0.21%    0x01053083    2374
+  1.94%       0.08%       0.21%    0x01242764    3097
+  1.81%       1.77%       0.20%    0x0175C101     430
+  1.73%       0.00%       1.21%    0x0123E140     248
+  1.73%       0.04%       0.19%    0x00387060     412
+  1.68%       0.00%       0.18%    0x0076DE0D     843   ;; STR:Secondary layer not supported here
+  1.68%       0.00%       0.18%    0x00ED6FDB     465
+  1.64%       0.00%       0.18%    0x0076DCB0     157
+
+## MAIN THREAD EXCLUSIVE TOP (Arma3_x64.exe leaf)
+# excl_main%  incl_main%  excl_all%  rva         size
+  9.26%       9.81%       1.01%    0x0169B288     462   ;; STR:Internal error: Rendering command buffer to smal
+  2.23%       3.12%       0.24%    0x01264CFB    1347
+  1.85%       2.74%       0.20%    0x0125BA20    1940
+  1.77%       1.81%       0.19%    0x0175C101     430
+  1.14%       8.38%       0.12%    0x0113E080    1684
+  1.01%       1.31%       0.11%    0x01237380     467
+  1.01%       1.01%       0.11%    0x00FD85FE      76
+  0.93%       0.93%       0.11%    0x01214A60     590   ;; VTABLE:Editor3D::EditorTriggerObject::vslot[124],ProxyPylonPod::vslot[124],ProxyPylonPodWeapon::vslot[124]
+  0.76%       1.56%       0.08%    0x00B55530     126   ;; VTABLE:EPEManagerPhysx3::vslot[13]
+  0.63%       0.80%       0.07%    0x00FD864A      51
+  0.59%       0.88%       0.06%    0x016AA48B     245
+  0.59%       0.59%       0.31%    0x01A249F0    1645   ;; KNOWN:Simulate_callee_16way_dispatch
+  0.59%       9.94%       0.06%    0x01250473    6434   ;; STR:tcsb | tcih | Error: can't resize AutoArray to negative size!
+  0.55%       0.55%       0.06%    0x01709D00     594
+  0.46%       1.56%       0.17%    0x0124BF7D    4557   ;; STR:Error: can't resize AutoArray to negative size!
+  0.46%       0.46%       0.08%    0x011F3BC2    1598
+  0.42%       0.59%       0.09%    0x01755ED0     167
+  0.42%       1.60%       0.05%    0x007BBF70     388   ;; STR:PxFilterShader::PxSetGroup
+  0.42%       0.42%       0.05%    0x0125F9B0      22
+  0.42%       0.42%       0.05%    0x011122DE     260
+  0.38%       0.55%       0.04%    0x0124186B    2313
+  0.38%       0.97%       0.04%    0x0115A83C     615
+  0.34%       1.05%       0.04%    0x0125C400     324
+  0.34%       1.05%       0.04%    0x01265250     565
+  0.34%       0.67%       0.04%    0x01246809     563
+  0.34%       0.38%       0.04%    0x0120AE40     471
+  0.34%       0.34%       0.04%    0x0121DF20      91
+  0.34%       0.51%       0.04%    0x0110DF36     130
+  0.34%       0.38%       0.04%    0x01055207     817
+  0.34%       1.05%       0.10%    0x011FC8A3    1447
+  0.29%       0.93%       0.03%    0x012294C0     494   ;; VTABLE:Windlet::vslot[60],Editor3D::EditorTriggerObject::vslot[60],ProxyPylonPod::vslot[60]
+  0.29%       0.29%       0.03%    0x01262200     278   ;; STR:Error: can't resize AutoArray to negative size!
+  0.29%       0.67%       0.03%    0x0120195D    2451   ;; STR:Array index out of range
+  0.29%      10.48%       0.03%    0x0113C911    1962
+  0.29%       0.38%       0.03%    0x01053DE0     463
+  0.25%       0.25%       0.10%    0x01756951      41
+  0.25%       0.55%       0.03%    0x0146F07A     364
+  0.25%       0.72%       0.03%    0x012631C4     384
+  0.25%       0.25%       0.04%    0x019D5600    1782
+  0.25%       0.55%       0.03%    0x00679984     994
+  0.21%       0.29%       0.02%    0x012421F2    1189
+  0.21%       0.21%       0.02%    0x01240850     125
+  0.21%       0.21%       0.09%    0x015E9E70    3468   ;; STR:Error: can't resize AutoArray to negative size!
+  0.21%       0.21%       0.02%    0x01240E56     557
+  0.21%       0.34%       0.02%    0x00E770A9     131
+  0.21%       0.21%       0.02%    0x01262757      56
+  0.21%       0.29%       0.02%    0x00E5E3F0     271
+  0.21%       0.21%       0.03%    0x01201240     480
+  0.21%       0.72%       0.02%    0x00FDAE6C    1729
+  0.21%       0.21%       0.02%    0x002031B0     111   ;; VTABLE:Windlet::vslot[51],Editor3D::EditorTriggerObject::vslot[51],AirportObject::vslot[51]
+
+## ALL THREADS EXCLUSIVE TOP (Arma3_x64.exe leaf)
+# excl_all%  incl_all%  excl_main%  rva         size
+  1.01%      1.07%      9.26%     0x0169B288     462   ;; STR:Internal error: Rendering command buffer to smal
+  0.31%      0.31%      0.59%     0x01A249F0    1645   ;; KNOWN:Simulate_callee_16way_dispatch
+  0.24%      0.34%      2.23%     0x01264CFB    1347
+  0.21%      4.43%      0.00%     0x01698F85    2018
+  0.20%      0.30%      1.85%     0x0125BA20    1940
+  0.19%      0.20%      1.77%     0x0175C101     430
+  0.19%      0.19%      0.21%     0x01A25430     199
+  0.17%      1.12%      0.46%     0x0124BF7D    4557   ;; STR:Error: can't resize AutoArray to negative size!
+  0.17%      2.98%      0.00%     0x01700920    1895   ;; STR:Error: Mapping of buffer failed | Invalid shader constant buffer type.
+  0.12%      0.91%      1.14%     0x0113E080    1684
+  0.11%      0.11%      1.01%     0x00FD85FE      76
+  0.11%      0.14%      1.01%     0x01237380     467
+  0.11%      0.11%      0.93%     0x01214A60     590   ;; VTABLE:Editor3D::EditorTriggerObject::vslot[124],ProxyPylonPod::vslot[124],ProxyPylonPodWeapon::vslot[124]
+  0.11%      0.11%      0.08%     0x01756920      49
+  0.11%      0.35%      0.13%     0x0175697A     181
+  0.10%      0.10%      0.25%     0x01756951      41
+  0.10%      0.38%      0.34%     0x011FC8A3    1447
+  0.09%      0.10%      0.21%     0x015E9E70    3468   ;; STR:Error: can't resize AutoArray to negative size!
+  0.09%      0.14%      0.42%     0x01755ED0     167
+  0.08%      0.17%      0.76%     0x00B55530     126   ;; VTABLE:EPEManagerPhysx3::vslot[13]
+  0.08%      0.08%      0.13%     0x017566C0     226
+  0.08%      0.08%      0.46%     0x011F3BC2    1598
+  0.07%      0.18%      0.08%     0x012074DC     690
+  0.07%      0.09%      0.63%     0x00FD864A      51
+  0.07%      0.31%      0.17%     0x01221380     430
+  0.06%      0.13%      0.04%     0x01247900     429
+  0.06%      0.10%      0.59%     0x016AA48B     245
+  0.06%      1.08%      0.59%     0x01250473    6434   ;; STR:tcsb | tcih | Error: can't resize AutoArray to negative size!
+  0.06%      0.06%      0.08%     0x00E711C0      66   ;; VTABLE:Windlet::vslot[53],AirportObject::vslot[53],AirplaneAutoEPE::vslot[53]
+  0.06%      0.06%      0.55%     0x01709D00     594
+  0.05%      4.50%      0.00%     0x016E20E7     135
+  0.05%      0.05%      0.08%     0x01A249E0      16
+  0.05%      0.05%      0.13%     0x01638618     785
+  0.05%      0.07%      0.08%     0x016F9EDB     274
+  0.05%      0.10%      0.04%     0x00EA4E00    1563
+  0.05%      0.05%      0.00%     0x017034F0     279
+  0.05%      0.20%      0.00%     0x016FB0CF     262
+  0.05%      0.17%      0.42%     0x007BBF70     388   ;; STR:PxFilterShader::PxSetGroup
+  0.05%      0.05%      0.42%     0x0125F9B0      22
+  0.05%      0.05%      0.42%     0x011122DE     260
+  0.04%      0.05%      0.00%     0x00E7B360     102   ;; VTABLE:AttachedOnVehicle::vslot[1],LightReflectorOnVehicle::vslot[1],LightPointOnVehicle::vslot[1]
+  0.04%      0.06%      0.38%     0x0124186B    2313
+  0.04%      0.08%      0.04%     0x0126BD95     788
+  0.04%      0.11%      0.38%     0x0115A83C     615
+  0.04%      0.51%      0.08%     0x0110E017     148
+  0.04%      0.05%      0.34%     0x0120AE40     471
+  0.04%      0.04%      0.17%     0x011F3019     438
+  0.04%      0.04%      0.00%     0x016CCB80      58
+  0.04%      8.81%      0.00%     0x016AA5E0     251
+  0.04%      0.04%      0.25%     0x019D5600    1782
+
+## MAIN THREAD TOP CALL EDGES (caller -> callee)
+# pct_main  hits   caller_rva -> callee_rva
+ 81.56%    1937  0x017751BD -> 0x011527E0   ;; ? -> World::Simulate
+ 81.22%    1929  0x01768422 -> 0x017751BD
+ 80.80%    1919  0x01773210 -> 0x01768422
+ 80.72%    1917  0x017799C0 -> 0x01773210
+ 79.79%    1895  0x0177CE70 -> 0x017799C0
+ 18.02%     428  0x011527E0 -> 0x01155340   ;; World::Simulate -> ?
+ 11.71%     278  0x011527E0 -> 0x0161127C   ;; World::Simulate -> ?
+ 11.45%     272  0x011527E0 -> 0x016C99AD   ;; World::Simulate -> ?
+ 10.82%     257  0x00385BDB -> 0x00382E90
+ 10.53%     250  0x016C99AD -> 0x016C7AE0
+ 10.48%     249  0x011527E0 -> 0x0113C911   ;; World::Simulate -> ?
+  9.94%     236  0x0161127C -> 0x01250473
+  9.85%     234  0x016C7AE0 -> 0x01699A30
+  9.81%     233  0x01699A30 -> 0x0169B288
+  8.38%     199  0x0113C911 -> 0x0113E080
+  7.66%     182  0x01159340 -> 0x011594A5
+  7.66%     182  0x01155340 -> 0x0115B980
+  7.66%     182  0x0115B980 -> 0x01159340
+  6.74%     160  0x011235D7 -> 0x0112292F
+  6.69%     159  0x011527E0 -> 0x011235D7   ;; World::Simulate -> ?
+  6.02%     143  0x0160F37A -> 0x016107C0
+  5.94%     141  0x0112292F -> 0x0160F37A
+  5.39%     128  0x011594A5 -> 0x00E77250
+  5.22%     124  0x011527E0 -> 0x003859C0   ;; World::Simulate -> ?
+  4.63%     110  0x003859C0 -> 0x00385BDB
+  4.17%      99  0x011527E0 -> 0x0162CFA0   ;; World::Simulate -> ?
+  4.08%      97  0x00385BDB -> 0x00384370
+  3.75%      89  0x0162CFA0 -> 0x0124A54B
+  3.54%      84  0x00384370 -> 0x003833D0
+  3.45%      82  0x0124E12C -> 0x0123BCA4
+  3.33%      79  0x01250473 -> 0x01241619
+  3.12%      74  0x0123BCA4 -> 0x00385BDB
+  2.95%      70  0x01241619 -> 0x01264CFB
+  2.65%      63  0x016107C0 -> 0x0124D800
+  2.36%      56  0x011527E0 -> 0x0113A800   ;; World::Simulate -> ?
+  2.36%      56  0x0113A800 -> 0x0162C690
+  2.32%      55  0x0113E080 -> 0x0125B140
+  2.27%      54  0x011527E0 -> 0x00385BDB   ;; World::Simulate -> ?
+  2.23%      53  0x0125B140 -> 0x0125BA20
+  2.11%      50  0x011594A5 -> 0x00E776E3

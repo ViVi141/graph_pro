@@ -1,17 +1,26 @@
-// injector.exe <processname.exe> <dllpath>
+// injector.exe <pid_or_processname.exe> <dllpath>
 #include <windows.h>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <tlhelp32.h>
 
-static DWORD FindPid(const char* name)
+static DWORD FindPid(const char* arg)
 {
+    char* end = nullptr;
+    unsigned long num = strtoul(arg, &end, 10);
+    if (end && *end == '\0' && num > 0) return (DWORD)num;
+
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snap == INVALID_HANDLE_VALUE) return 0;
+    if (snap == INVALID_HANDLE_VALUE) {
+        printf("CreateToolhelp32Snapshot failed %lu\n", GetLastError());
+        return 0;
+    }
     PROCESSENTRY32 pe{}; pe.dwSize = sizeof(pe);
     DWORD pid = 0;
     if (Process32First(snap, &pe)) {
         do {
-            if (_stricmp(pe.szExeFile, name) == 0) { pid = pe.th32ProcessID; break; }
+            if (_stricmp(pe.szExeFile, arg) == 0) { pid = pe.th32ProcessID; break; }
         } while (Process32Next(snap, &pe));
     }
     CloseHandle(snap);
@@ -20,7 +29,7 @@ static DWORD FindPid(const char* name)
 
 int main(int argc, char** argv)
 {
-    if (argc < 3) { printf("usage: injector.exe <process.exe> <dll>\n"); return 1; }
+    if (argc < 3) { printf("usage: injector.exe <pid|process.exe> <dll>\n"); return 1; }
     DWORD pid = FindPid(argv[1]);
     if (!pid) { printf("process %s not found\n", argv[1]); return 2; }
     printf("pid %lu\n", pid);
@@ -28,14 +37,16 @@ int main(int argc, char** argv)
     if (!h) { printf("OpenProcess failed %lu\n", GetLastError()); return 3; }
     size_t len = strlen(argv[2]) + 1;
     void* mem = VirtualAllocEx(h, nullptr, len, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    if (!mem) { printf("VirtualAllocEx failed\n"); return 4; }
-    if (!WriteProcessMemory(h, mem, argv[2], len, nullptr)) { printf("WriteProcessMemory failed\n"); return 5; }
+    if (!mem) { printf("VirtualAllocEx failed %lu\n", GetLastError()); return 4; }
+    if (!WriteProcessMemory(h, mem, argv[2], len, nullptr)) { printf("WriteProcessMemory failed %lu\n", GetLastError()); return 5; }
     HMODULE k32 = GetModuleHandleA("kernel32.dll");
     void* load = (void*)GetProcAddress(k32, "LoadLibraryA");
     HANDLE th = CreateRemoteThread(h, nullptr, 0, (LPTHREAD_START_ROUTINE)load, mem, 0, nullptr);
     if (!th) { printf("CreateRemoteThread failed %lu\n", GetLastError()); return 6; }
     WaitForSingleObject(th, 10000);
     DWORD code = 0; GetExitCodeThread(th, &code);
-    printf("LoadLibraryA returned %lu (module base low bits)\n", code);
+    printf("LoadLibraryA returned 0x%lX\n", code);
+    CloseHandle(th);
+    CloseHandle(h);
     return 0;
 }

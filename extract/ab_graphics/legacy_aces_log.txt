@@ -1,0 +1,13 @@
+[GP] loaded shader replacement size=5860 crc=42670B06 (1804 bytes)
+[GP] loaded GP_ssao.dxbc (780 bytes)
+[GP] config: backend=auto amb=0.80/0.90 tint=1.00/1.00 expo=1696(0.00..1.35) spec=0(0.15)
+[GP] backend loaded: DXVK (F:\SteamLibrary\steamapps\common\Arma 3\gp_dxvk_d3d11.dll)
+[GP] device hooks active (DXVK Vulkan, ctxHook=1)
+[GP] device hooks active (DXVK Vulkan, ctxHook=1)
+[GP] device hooks active (DXVK Vulkan, ctxHook=1)
+[GP] device hooks active (DXVK Vulkan, ctxHook=1)
+[GP] swapchain capture armed (GP_enable_dump.txt)
+[GP] device hooks active (DXVK Vulkan, ctxHook=1)
+[GP] REPLACED SSAOFinal len=692 crc=850EE87F
+[GP] REPLACED PS len=5860 crc=42670B06 -> 1804 bytes
+[GP] captured backbuffer 1707x1067 fmt=28 -> GP_shot.raw

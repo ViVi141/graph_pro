@@ -1,0 +1,22 @@
+﻿{
+    "tag":  "02_dxvk_311",
+    "timestamp":  "2026-11-22T23:16:03",
+    "use_dxvk":  true,
+    "malloc":  "",
+    "affinity":  "",
+    "windowed":  false,
+    "allocator_rpt":  "Allocator: F:\\SteamLibrary\\steamapps\\common\\Arma 3\\Dll\\tbb4malloc_bi_x64.dll [2017.0.0.0] [2017.0.0.0]",
+    "start_line":  "[GP_YAAB_START] vd=3800 objvd=[2300,100] tg=3.125 res=[2560,1440,1056,792,1.77778,0.55,0.75,1.33333,false,0.8]\"",
+    "result_line":  "[GP_YAAB_RESULT] yaabfps=63.43 frames=8830 runtime=139.2 ft_n=8830 p50_ms=15.01 p95_ms=22.00 p99_ms=24.00 low1_fps=33.24 low01_fps=17.54\"",
+    "rpt_path":  "C:\\Users\\74738\\AppData\\Local\\Arma 3\\Arma3_x64_2026-11-22_23-12-53.rpt",
+    "prof_report":  null,
+    "yaabfps":  63.43,
+    "frames":  8830,
+    "runtime":  139.2,
+    "ft_n":  8830,
+    "p50_ms":  15.01,
+    "p95_ms":  22,
+    "p99_ms":  24,
+    "low1_fps":  33.24,
+    "low01_fps":  17.54
+}

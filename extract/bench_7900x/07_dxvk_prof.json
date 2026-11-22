@@ -1,0 +1,22 @@
+﻿{
+    "tag":  "07_dxvk_prof",
+    "timestamp":  "2026-11-22T23:39:01",
+    "use_dxvk":  true,
+    "malloc":  "gp_mimalloc",
+    "affinity":  "",
+    "windowed":  false,
+    "allocator_rpt":  "Allocator: F:\\SteamLibrary\\steamapps\\common\\Arma 3\\Dll\\gp_mimalloc_x64.dll [] []",
+    "start_line":  "[GP_YAAB_START] vd=3800 objvd=[2300,100] tg=3.125 res=[2560,1440,1056,792,1.77778,0.55,0.75,1.33333,false,0.8]\"",
+    "result_line":  "[GP_YAAB_RESULT] yaabfps=50.70 frames=7064 runtime=139.3 ft_n=7064 p50_ms=19.00 p95_ms=27.01 p99_ms=31.01 low1_fps=29.49 low01_fps=24.65\"",
+    "rpt_path":  "C:\\Users\\74738\\AppData\\Local\\Arma 3\\Arma3_x64_2026-11-22_23-35-48.rpt",
+    "prof_report":  "C:\\Users\\74738\\Desktop\\Projects\\Arma3\\graph_pro\\extract\\bench_7900x\\07_dxvk_prof_prof.txt",
+    "yaabfps":  50.7,
+    "frames":  7064,
+    "runtime":  139.3,
+    "ft_n":  7064,
+    "p50_ms":  19,
+    "p95_ms":  27.01,
+    "p99_ms":  31.01,
+    "low1_fps":  29.49,
+    "low01_fps":  24.65
+}
