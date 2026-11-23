@@ -12,6 +12,12 @@ cbuffer PSCB_PostProcess : register(b13)
     float4 c[84];
 };
 
+cbuffer GP_Tune : register(b12)
+{
+    float4 gp_p0; // x=exposure, y=contrast, z=vibrance, w=sharpness
+    float4 gp_p1; // x=rtgiBounce, y=rtgiAo, z=treeSss, w=glassRefl
+};
+
 struct PSIn
 {
     float4 pos : SV_Position;
@@ -152,9 +158,10 @@ float4 main(PSIn i) : SV_Target
         giAccum += rayGI;
     }
 
+    float  aoStr   = (gp_p1.y > 0.01f && gp_p0.x > 0.1f) ? gp_p1.y : 0.82f;
     float3 giFinal = (giAccum * (1.0f / 8.0f)) * distFade * solidMask;
     float  aoCurve = pow(saturate((aoAccum * (1.0f / 8.0f)) * 1.65f), 1.15f);
-    float  aoFinal = 1.0f - aoCurve * 0.82f * distFade * solidMask;
+    float  aoFinal = 1.0f - aoCurve * aoStr * distFade * solidMask;
 
     return float4(giFinal, aoFinal);
 }

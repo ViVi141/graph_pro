@@ -5,7 +5,7 @@ param(
     [string]$Tier = 'auto',
     [ValidateSet('auto', 'dxvk', 'native')]
     [string]$Backend = 'auto',
-    [ValidateSet('off', 'agx', 'agx_lite', 'ssgi', 'ultra', 'legacy')]
+    [ValidateSet('off', 'agx', 'ultra')]
     [string]$Graphics = 'off',
     [switch]$Silent
 )
@@ -158,13 +158,7 @@ if ($Graphics -eq 'off' -and $Backend -ne 'native') {
     $dxvkConf = Join-Path $Game 'dxvk.conf'
     $confTxt = (Get-Content $dxvkConf -Raw) -replace 'dxvk\.numCompilerThreads\s*=\s*\d+', "dxvk.numCompilerThreads = $compThreads"
     Set-Content -Path $dxvkConf -Value $confTxt -NoNewline -Encoding Ascii
-    $gDir = switch ($Graphics) {
-        'agx'      { 'graphics_agx' }
-        'agx_lite' { 'graphics_agx_lite' }
-        'ssgi'     { 'graphics_ssgi' }
-        'ultra'    { 'graphics_ultra' }
-        default    { 'graphics_legacy' }
-    }
+    $gDir = if ($Graphics -eq 'ultra') { 'graphics_ultra' } else { 'graphics_agx' }
     Get-ChildItem (Join-Path $src $gDir) -File -ErrorAction SilentlyContinue | ForEach-Object {
         Copy-Item $_.FullName (Join-Path $Game $_.Name) -Force
     }

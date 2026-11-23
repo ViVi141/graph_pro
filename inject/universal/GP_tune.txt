@@ -4,6 +4,6 @@ contrast=1.18
 vibrance=0.08
 sharpness=0.34
 rtgiBounce=1.35
-rtgiAo=0.72
+rtgiAo=0.82
 treeSss=0.55
 glassRefl=1.00
