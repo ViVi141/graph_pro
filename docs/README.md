@@ -49,6 +49,7 @@ Status labels:
 | [15-render-pipeline-injection-map.md](15-render-pipeline-injection-map.md) | Hook map + pass order | historical map; classic line archived |
 | [20-route2-7900x-7900xt-perf.md](20-route2-7900x-7900xt-perf.md) | Route 2: DXVK chain on 7900X/7900XT, 14-round controlled A/B (perf only) | data |
 | [21-project-review.md](21-project-review.md) | Engineering review and fix log | review |
+| [22-shader-catalog.md](22-shader-catalog.md) | All 9061 shader blobs catalogued and disassembled, fingerprint audit, DXBC→HLSL rewrite pipeline | current |
 
 > Two documents carry the number 20 (`20-client-cpu-forensics` and
 > `20-route2-7900x-7900xt-perf`). The numbering was never reflowed: 20 was taken

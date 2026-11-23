@@ -223,6 +223,7 @@ python archive\legacy-proxy\tools\analyze_capture.py "$env:ARMA3_DIR"
 - 注入方案与可行性：[02](docs/02-injection-plan.md)、[10](docs/10-dll-options.md)、[12](docs/12-pipeline-feasibility.md)
 - CPU 归因：[13](docs/13-cpu-hotspot.md)、[16](docs/16-cpu-server-soft-levers.md)、[17](docs/17-ai-wp-cost-table.md)、[18](docs/18-mission-cpu-estimate.md)、[20](docs/20-client-cpu-forensics.md)
 - DXVK / Universal 线：[20-route2-7900x-7900xt-perf.md](docs/20-route2-7900x-7900xt-perf.md)、[inject/universal/README.txt](inject/universal/README.txt)
+- 着色器目录与重写：[22-shader-catalog.md](docs/22-shader-catalog.md)（9061 个 blob / 2585 个着色器、指纹审计、DXBC→HLSL）
 - 社区版解释：[blog-arma-optimization.md](docs/blog-arma-optimization.md)
 
 ---
