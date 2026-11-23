@@ -1,8 +1,14 @@
 ﻿#Requires -Version 5.0
+param([string]$BaseDir = '')
 $ErrorActionPreference = 'Stop'
-$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$here = if ($BaseDir) { $BaseDir } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
 $installPs1   = Join-Path $here 'install.ps1'
 $uninstallPs1 = Join-Path $here 'uninstall.ps1'
+
+function Invoke-Utf8Script([string]$path, [hashtable]$params) {
+    $code = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    & ([scriptblock]::Create($code)) @params
+}
 
 function Find-Arma3Dir {
     $reg = Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Bohemia Interactive\Arma 3' -ErrorAction SilentlyContinue
@@ -83,24 +89,24 @@ while ($true) {
         switch ($choice) {
             '1' {
                 $tier = Ask-Tier
-                & $installPs1 -Game $gameDir -Graphics off -Tier $tier -Silent
+                Invoke-Utf8Script $installPs1 @{ Game = $gameDir; Graphics = 'off'; Tier = $tier; Silent = $true; BaseDir = $here }
                 Write-Host ''
                 pause
             }
             '2' {
                 $tier = Ask-Tier
-                & $installPs1 -Game $gameDir -Graphics agx -Tier $tier -Silent
+                Invoke-Utf8Script $installPs1 @{ Game = $gameDir; Graphics = 'agx'; Tier = $tier; Silent = $true; BaseDir = $here }
                 Write-Host ''
                 pause
             }
             '3' {
                 $tier = Ask-Tier
-                & $installPs1 -Game $gameDir -Graphics ultra -Tier $tier -Silent
+                Invoke-Utf8Script $installPs1 @{ Game = $gameDir; Graphics = 'ultra'; Tier = $tier; Silent = $true; BaseDir = $here }
                 Write-Host ''
                 pause
             }
             '4' {
-                & $uninstallPs1 -Game $gameDir -Silent
+                Invoke-Utf8Script $uninstallPs1 @{ Game = $gameDir; Silent = $true }
                 Write-Host ''
                 pause
             }

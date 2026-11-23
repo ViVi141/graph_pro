@@ -7,11 +7,12 @@ param(
     [string]$Backend = 'auto',
     [ValidateSet('off', 'agx', 'ultra')]
     [string]$Graphics = 'off',
-    [switch]$Silent
+    [switch]$Silent,
+    [string]$BaseDir = ''
 )
 
 $ErrorActionPreference = 'Stop'
-$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$here = if ($BaseDir) { $BaseDir } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
 $src  = Join-Path $here 'files'
 if (-not (Test-Path (Join-Path $src 'd3d11.dll'))) {
     $repoDist = Join-Path (Split-Path (Split-Path $here -Parent) -Parent) 'dist\graph_pro_universal\files'
