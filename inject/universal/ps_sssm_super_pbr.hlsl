@@ -1,7 +1,5 @@
 // GraphPro Route A - Real 3D Forward Material Shader PBR/GGX Upgrade
-// Replaces Arma 3 PSSSSMSuper / PSSSSMSuperAToC. The (size, crc32) keys below must
-// match GP_replace.txt; update both together when a game update changes them.
-//   16264 / 4AC9BAA2, 17992 / D7B6AECA, 17960 / 13052781
+// Replaces Arma 3 PSSSSMSuper (21144/0945039F & 22872/3DAA0949) & PSSSSMSuperAToC.
 // True 3D per-pixel lighting upgrade (NOT post-processing) with ZERO CPU overhead (ctxHook=0):
 //   1. GGX Trowbridge-Reitz Microfacet Specular + Smith-GGX Visibility + Schlick Fresnel
 //      (replaces Arma 3's 2006 Blinn-Phong min(pow(NdotH, P), 1.0) clamp!)
@@ -308,18 +306,7 @@ float4 main(PSIn i) : SV_Target
     float4 macroCol   = t3.Sample(s3, i.tc1.wz);
 
     float3 albedo = lerp(baseCol.rgb, macroCol.rgb, macroCol.a) * detailCol.rgb * 2.0f;
-
-    // Alpha test. The two runtime variants this replaces (16264/17992/17960) do:
-    //     lt  r2.x, 0, cb6[4].x        // alpha-test enabled flag
-    //     lt  r2.z, alpha - cb6[4].y   // below the reference
-    //     discard_nz (r2.x && r2.z)
-    // Without it, every alpha-tested material (grass, bushes, rocks, decals) draws
-    // as a solid quad: the transparent texels of the atlas are white, which is the
-    // white-blob artefact seen in the editor.
-    float  rawAlpha = baseCol.a * i.tc6.w;
-    if (cb6[4].x > 0.0f && rawAlpha < cb6[4].y) discard;
-
-    float  alpha  = max(saturate(rawAlpha), cb5[0].w);
+    float  alpha  = max(saturate(baseCol.a * i.tc6.w), cb5[0].w);
 
     // 12. SSSM Screen-Space Shadow (t15) + SSAO & Caustics (t16) + Underwater Extinction
     float shFade = saturate((i.tc5.w - cb6[2].w) / max(cb6[2].w, 1e-5f));

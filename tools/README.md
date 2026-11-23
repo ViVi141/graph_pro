@@ -19,6 +19,10 @@ $env:ARMA3_DIR = "C:\Program Files (x86)\Steam\steamapps\common\Arma 3"
 |---|---|
 | `universal_smoke_test.py` | Headless D3D11 device for the Universal proxy: DllMain does no file IO, config loads on first device creation, shader replacement, and a config file dropped in **after** launch being picked up by the 2 s poll. No game. |
 | `verify_universal.ps1` | Read-only deployment check: proxy identity, hashes, backend/graphics-pack state, log hits, and the `dist/` release manifest. |
+| `verify_shaders.py` | Cross-checks the deployed `GP_replace.txt` against `GP_universal.log` through the shader catalog: per-key hits, unknown-origin keys, payload drift. |
+| `switch-proxy.ps1` | Swaps the deployed `d3d11.dll` between the known-good build and the current build (hash-verified, refuses a DXVK-dxgi-without-proxy state). |
+| `shader_catalog.py` | Extracts every DXBC blob from the `.shdc` caches, disassembles it and writes the catalog + HLSL skeletons. |
+| `dxbc_to_hlsl.py` | Transliterates a disassembled shader back to compilable HLSL (fxc-verified). |
 | `make_manifest.py` | Writes `dist/graph_pro_universal/MANIFEST.json` (git commit + sha256 of every released file) so a deployment can be traced to a build. |
 | `estimate_mission_cpu.py` | SEU budget model (`config/cpu_catalog.json` + `docs/17` coefficients). |
 | `pe_imports.py` | PE import table (confirm the game's D3D11/DXGI surface). |

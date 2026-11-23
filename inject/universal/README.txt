@@ -46,11 +46,10 @@ GraphPro Universal — Arma 3 全硬件通用性能与画质一键优化/重置�
 
 运行时行为（代理侧）：
   - 不改任何模型 / 贴图 / rvmat；只替换 (size, crc32) 指纹命中后处理/材质着色器。
-  - GP_amb.txt / GP_expo.txt / GP_spec.txt 每 2 秒按文件时间戳检查一次：改内容立即生效，
-    启动后再放入这些文件也会被识别（日志写 "constant injection enabled by a config file
-    that appeared after launch"）。注意 GP_replace.txt / 各 .dxbc 载荷仍需重启游戏。
-  - 启动日志 device hooks active (... ctxHook=0, mapHook=1 ...)：ctxHook=0 表示没有启用任何
-    常量注入（画质包档位的常态）；Map/Unmap 始终挂着直通包装器，未配置时只多一次布尔判断。
+  - GP_amb.txt / GP_expo.txt / GP_spec.txt 在启动时读取；运行中每 2 秒按文件时间戳检查一次，
+    改了内容会热更新，但**启动前不存在这类文件时不会补挂钩子**（需要重启游戏）。
+  - 启动日志 device hooks active (... ctxHook=0 ...)：ctxHook=0 表示没有启用常量注入，
+    这是画质包档位的常态。
   - 创建 50 个像素着色器仍无任何替换命中时写 WARN（说明游戏已更新、指纹过期）。
 
 安全提示：

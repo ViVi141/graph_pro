@@ -6,10 +6,6 @@
 //      Material Ambient/Tint + Fingerprint-Safe Auto-Exposure Clamp + Optional Selective Specular.
 //   3. Zero Present hook (100% compatible with AMD AFMF 2, Steam Overlay, DXVK Flip Model)
 //      and zero wasted VRAM / probe bloat.
-//   4. Config files are hot-reloadable: GP_amb/GP_expo/GP_spec are re-read when
-//      their mtime+size changes, and a config dropped in after launch is picked
-//      up within ~2 s (the Unmap wrapper always polls; it does no file IO unless
-//      a stamp changed). GP_replace.txt and the DXBC payloads still need a restart.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -70,18 +66,9 @@ static volatile long g_ssaoReplaced = 0;
 static volatile ULONGLONG g_lastReloadMs = 0;
 static bool g_enableDump = false;
 static bool g_dumpPs = false;
-// Opt-in: write every pixel shader the engine creates to GP_psdump\<size>_<crc>.dxbc.
-// The shipped .shdc caches are NOT the complete runtime set (3 of the 9 keys the
-// PBR pack replaces do not exist in Dta\bin.pbo yet do get created at runtime),
-// so a real run is the only way to capture those blobs.
-static bool g_dumpBytes = false;
 static bool g_enableSsgi = false;
 static ID3D11Device* g_dev = nullptr;
 static ID3D11DeviceContext* g_ctx = nullptr;
-
-// Defined further down, but the hot-reload path needs them.
-static bool NeedContextHook();
-static void HookContext(ID3D11DeviceContext* ctx);
 
 // Deferred init (config files are read on the first CreateDevice*, never in DllMain).
 static volatile LONG g_initState = 0;      // 0 = new, 1 = running, 2 = done
@@ -132,23 +119,17 @@ static void Log(const char* fmt, ...) {
   LeaveCriticalSection(&g_logCs);
 }
 
-static const uint32_t* CrcTable() {
-  // Function-local static: initialised exactly once even when several threads
-  // create pixel shaders concurrently (magic static, C++11).
-  static const uint32_t* t = [] {
-    static uint32_t tab[256];
+static uint32_t Crc32(const void* buf, size_t len) {
+  static uint32_t t[256];
+  static bool init = false;
+  if (!init) {
     for (uint32_t i = 0; i < 256; i++) {
       uint32_t c = i;
       for (int k = 0; k < 8; k++) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
-      tab[i] = c;
+      t[i] = c;
     }
-    return tab;
-  }();
-  return t;
-}
-
-static uint32_t Crc32(const void* buf, size_t len) {
-  const uint32_t* t = CrcTable();
+    init = true;
+  }
   const uint8_t* p = (const uint8_t*)buf;
   uint32_t c = 0xFFFFFFFFu;
   for (size_t i = 0; i < len; i++) c = t[(c ^ p[i]) & 0xFF] ^ (c >> 8);
@@ -192,96 +173,45 @@ static bool DisassembleInto(const void* data, size_t len, std::string& out) {
 }
 
 // ---------------------------------------------------------------- Config (Hot-Reloadable)
-// The hot-reload poll runs on the render thread, so it must not open files on
-// every tick. Each config file is stamped (mtime + size) and only re-read when
-// the stamp changes; three GetFileAttributesEx calls replace fopen/fscanf/fclose.
-struct FileStamp {
-  DWORD lo = 0xFFFFFFFFu, hi = 0xFFFFFFFFu, size = 0xFFFFFFFFu;
-  bool operator==(const FileStamp& o) const { return lo == o.lo && hi == o.hi && size == o.size; }
-};
-
-static FileStamp StatFile(const std::string& p) {
-  FileStamp s;
-  WIN32_FILE_ATTRIBUTE_DATA d{};
-  if (GetFileAttributesExA(p.c_str(), GetFileExInfoStandard, &d)) {
-    s.lo = d.ftLastWriteTime.dwLowDateTime;
-    s.hi = d.ftLastWriteTime.dwHighDateTime;
-    s.size = d.nFileSizeLow;
-  }
-  return s;
-}
-
 static void ReloadDynamicConfig(bool initial) {
   std::string dir(g_dir);
 
-  static FileStamp ambStamp, expoStamp, specStamp;
-  const FileStamp ambNow  = StatFile(dir + "\\GP_amb.txt");
-  const FileStamp expoNow = StatFile(dir + "\\GP_expo.txt");
-  const FileStamp specNow = StatFile(dir + "\\GP_spec.txt");
-  const bool ambDue  = initial || !(ambNow == ambStamp);
-  const bool expoDue = initial || !(expoNow == expoStamp);
-  const bool specDue = initial || !(specNow == specStamp);
-  ambStamp = ambNow; expoStamp = expoNow; specStamp = specNow;
-
-  if (ambDue) {
-    FILE* af = fopen((dir + "\\GP_amb.txt").c_str(), "r");
-    if (af) {
-      float a = 0, b = 0, tr = 1.0f, tb = 1.0f;
-      int got = fscanf(af, "%f %f %f %f", &a, &b, &tr, &tb);
-      fclose(af);
-      if (got >= 2) { g_ambScale = a; g_aeScale = b; }
-      if (got >= 4) { g_tintR = tr; g_tintB = tb; }
-    } else if (!initial) {
-      g_ambScale = 0.0f; g_aeScale = 0.0f;
-    }
+  FILE* af = fopen((dir + "\\GP_amb.txt").c_str(), "r");
+  if (af) {
+    float a = 0, b = 0, tr = 1.0f, tb = 1.0f;
+    int got = fscanf(af, "%f %f %f %f", &a, &b, &tr, &tb);
+    fclose(af);
+    if (got >= 2) { g_ambScale = a; g_aeScale = b; }
+    if (got >= 4) { g_tintR = tr; g_tintB = tb; }
+  } else if (!initial) {
+    g_ambScale = 0.0f; g_aeScale = 0.0f;
   }
 
-  if (expoDue) {
-    FILE* ef = fopen((dir + "\\GP_expo.txt").c_str(), "r");
-    if (ef) {
-      unsigned sz = 0; float lo = 0.0f, hi = 0.0f;
-      if (fscanf(ef, "%u %f %f", &sz, &lo, &hi) >= 3) {
-        g_expoSize = sz; g_expoLo = lo; g_expoHi = hi;
-      }
-      fclose(ef);
+  FILE* ef = fopen((dir + "\\GP_expo.txt").c_str(), "r");
+  if (ef) {
+    unsigned sz = 0; float lo = 0.0f, hi = 0.0f;
+    if (fscanf(ef, "%u %f %f", &sz, &lo, &hi) >= 3) {
+      g_expoSize = sz; g_expoLo = lo; g_expoHi = hi;
+    }
+    fclose(ef);
+  } else {
+    g_expoSize = 0;
+  }
+
+  FILE* sf = fopen((dir + "\\GP_spec.txt").c_str(), "r");
+  if (sf) {
+    float a = 0, b = 0, c = 0;
+    int got = fscanf(sf, "%f %f %f", &a, &b, &c);
+    fclose(sf);
+    if (got >= 1 && (a == 0.0f || a == 1.0f)) {
+      g_specMode = (int)a;
+      g_specBoost = (got >= 2) ? b : 0.0f;
+      g_specPower = (got >= 3) ? c : 0.0f;
     } else {
-      g_expoSize = 0;
-    }
-  }
-
-  if (specDue) {
-    FILE* sf = fopen((dir + "\\GP_spec.txt").c_str(), "r");
-    if (sf) {
-      float a = 0, b = 0, c = 0;
-      int got = fscanf(sf, "%f %f %f", &a, &b, &c);
-      fclose(sf);
-      if (got >= 1 && (a == 0.0f || a == 1.0f)) {
-        g_specMode = (int)a;
-        g_specBoost = (got >= 2) ? b : 0.0f;
-        g_specPower = (got >= 3) ? c : 0.0f;
-      } else {
-        g_specMode = 0;
-      }
-    } else if (!initial) {
       g_specMode = 0;
     }
-  }
-}
-
-// Polled from the always-installed Unmap wrapper every 2 s. Cheap when nothing
-// changed (three stat calls, no fopen), and it is what makes a config file
-// dropped in after launch take effect - previously NeedContextHook() was only
-// ever sampled at device creation, so such a file was silently ignored.
-static void MaybeReloadConfig() {
-  ULONGLONG now = GetTickCount64();
-  ULONGLONG last = (ULONGLONG)InterlockedCompareExchange64((volatile LONG64*)&g_lastReloadMs, 0, 0);
-  if (now - last <= 2000) return;
-  if (InterlockedCompareExchange64((volatile LONG64*)&g_lastReloadMs, (LONG64)now, (LONG64)last) != (LONG64)last) return;
-
-  const bool before = NeedContextHook();
-  ReloadDynamicConfig(false);
-  if (!before && NeedContextHook()) {
-    Log("[GP] constant injection enabled by a config file that appeared after launch\n");
+  } else if (!initial) {
+    g_specMode = 0;
   }
 }
 
@@ -320,7 +250,6 @@ static void LoadInitialConfig() {
 
   g_enableDump = GetFileAttributesA((dir + "\\GP_enable_dump.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   g_dumpPs     = GetFileAttributesA((dir + "\\GP_dump_ps.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
-  g_dumpBytes  = GetFileAttributesA((dir + "\\GP_dump_bytes.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   g_enableSsgi = GetFileAttributesA((dir + "\\GP_ssgi.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   if (g_enableSsgi &&
       LoadFile(dir + "\\GP_rtgi_trace.dxbc", g_rtgiTraceBytes) &&
@@ -350,22 +279,6 @@ static void EnsureInit() {
 }
 
 // ---------------------------------------------------------------- Shader Hook
-static void DumpShaderBlob(const void* data, size_t len, uint32_t crc) {
-  char dirp[MAX_PATH];
-  snprintf(dirp, sizeof(dirp), "%s\\GP_psdump", g_dir);
-  CreateDirectoryA(dirp, nullptr);
-  char p[MAX_PATH];
-  snprintf(p, sizeof(p), "%s\\%zu_%08X.dxbc", dirp, len, crc);
-  if (GetFileAttributesA(p) != INVALID_FILE_ATTRIBUTES) return;   // captured already
-  FILE* f = fopen(p, "wb");
-  if (!f) return;
-  fwrite(data, 1, len, f);
-  fclose(f);
-  static volatile LONG n = 0;
-  if (InterlockedIncrement(&n) <= 8) {
-    Log("[GP] dumped PS blob %zu B crc=%08X -> %s\n", len, crc, p);
-  }
-}
 typedef HRESULT (STDMETHODCALLTYPE *PFN_CPS)(
     ID3D11Device*, const void*, SIZE_T, ID3D11ClassLinkage*, ID3D11PixelShader**);
 static PFN_CPS g_origCPS = nullptr;
@@ -389,7 +302,6 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
   long created = InterlockedIncrement(&g_psCreated);
   if (data && len > 0) {
     uint32_t crc = Crc32(data, len);
-    if (g_dumpBytes) DumpShaderBlob(data, (size_t)len, crc);
     if (g_dumpPs && len >= 12000) {
       std::string txt;
       int nTex = 0;
@@ -453,21 +365,14 @@ struct MapRec {
   ID3D11Resource* res;
   void* data;
   UINT size;
-  ULONGLONG t;   // GetTickCount64() at Map, so a missed Unmap cannot leak a slot forever
 };
 static const int kMaxMaps = 128;
 static MapRec g_maps[kMaxMaps];
-// Number of live records; lets Unmap skip the table scan (and its lock) entirely
-// on the many Unmaps of resources we never recorded.
-static volatile LONG g_mapCount = 0;
-static volatile LONG g_matInjected = 0;
 
 static HRESULT STDMETHODCALLTYPE Hook_Map(
     ID3D11DeviceContext* ctx, ID3D11Resource* res, UINT sub,
     D3D11_MAP type, UINT flags, D3D11_MAPPED_SUBRESOURCE* mapped) {
   HRESULT hr = g_origMap(ctx, res, sub, type, flags, mapped);
-  // Nothing configured: behave as if we were not here (no COM round-trips).
-  if (!NeedContextHook()) return hr;
   if (SUCCEEDED(hr) && mapped && res && type == D3D11_MAP_WRITE_DISCARD) {
     ID3D11Buffer* buf = nullptr;
     if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Buffer), (void**)&buf)) && buf) {
@@ -476,15 +381,11 @@ static HRESULT STDMETHODCALLTYPE Hook_Map(
       buf->Release();
       if (d.ByteWidth == 224 || (g_expoSize && d.ByteWidth == g_expoSize)) {
         EnterCriticalSection(&g_mapCs);
-        int slot = -1;
-        ULONGLONG oldest = ~0ull;
         for (int k = 0; k < kMaxMaps; k++) {
-          if (!g_maps[k].res) { slot = k; break; }
-          if (g_maps[k].t < oldest) { oldest = g_maps[k].t; slot = k; }
-        }
-        if (slot >= 0) {
-          g_maps[slot] = {ctx, res, mapped->pData, d.ByteWidth, GetTickCount64()};
-          InterlockedIncrement(&g_mapCount);
+          if (!g_maps[k].res) {
+            g_maps[k] = {ctx, res, mapped->pData, d.ByteWidth};
+            break;
+          }
         }
         LeaveCriticalSection(&g_mapCs);
       }
@@ -495,27 +396,21 @@ static HRESULT STDMETHODCALLTYPE Hook_Map(
 
 static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resource* res, UINT sub) {
   if (res) {
-    // Hot-reload poll: stamp check only, so the render thread never opens a file
-    // unless one actually changed on disk.
-    MaybeReloadConfig();
-    if (InterlockedCompareExchange(&g_mapCount, 0, 0) <= 0) { g_origUnmap(ctx, res, sub); return; }
+    // Periodic hot-reload every 2 seconds (no Present hook required)
+    ULONGLONG now = GetTickCount64();
+    if (now - g_lastReloadMs > 2000) {
+      g_lastReloadMs = now;
+      ReloadDynamicConfig(false);
+    }
 
     void* dataPtr = nullptr;
     UINT byteSize = 0;
-    const ULONGLONG now = GetTickCount64();
     EnterCriticalSection(&g_mapCs);
     for (int i = 0; i < kMaxMaps; i++) {
-      // A Map without a matching Unmap (device reset, resize, crashed pass) used
-      // to hold its slot for the rest of the process; reclaim it after 5 s.
-      if (g_maps[i].res && now - g_maps[i].t > 5000) {
-        g_maps[i].res = nullptr;
-        InterlockedDecrement(&g_mapCount);
-      }
       if (g_maps[i].res == res && g_maps[i].ctx == ctx) {
         dataPtr = g_maps[i].data;
         byteSize = g_maps[i].size;
         g_maps[i].res = nullptr;
-        InterlockedDecrement(&g_mapCount);
         break;
       }
     }
@@ -568,11 +463,6 @@ static void STDMETHODCALLTYPE Hook_Unmap(ID3D11DeviceContext* ctx, ID3D11Resourc
           f[5] *= g_aeScale;
           f[6] *= g_aeScale * g_tintB;
         }
-        if ((g_ambScale > 0.0f || g_aeScale > 0.0f) &&
-            InterlockedIncrement(&g_matInjected) <= 2) {
-          Log("[GP] material amb/ae injected (scale %.2f/%.2f tint %.2f/%.2f) size=224\n",
-              g_ambScale, g_aeScale, g_tintR, g_tintB);
-        }
       }
     }
   }
@@ -595,50 +485,10 @@ typedef void (STDMETHODCALLTYPE *PFN_PSSetSRVs)(ID3D11DeviceContext*, UINT, UINT
 typedef void (STDMETHODCALLTYPE *PFN_PSSetShader)(ID3D11DeviceContext*, ID3D11PixelShader*, ID3D11ClassInstance* const*, UINT);
 typedef void (STDMETHODCALLTYPE *PFN_DrawIndexed)(ID3D11DeviceContext*, UINT, UINT, INT);
 typedef void (STDMETHODCALLTYPE *PFN_Draw)(ID3D11DeviceContext*, UINT, UINT);
-typedef void (STDMETHODCALLTYPE *PFN_DrawIndexedInstanced)(ID3D11DeviceContext*, UINT, UINT, UINT, INT);
-typedef void (STDMETHODCALLTYPE *PFN_DrawInstanced)(ID3D11DeviceContext*, UINT, UINT, UINT);
 static PFN_PSSetSRVs   g_origPSSetSRVs   = nullptr;
 static PFN_PSSetShader g_origPSSetShader = nullptr;
 static PFN_DrawIndexed g_origDrawIndexed = nullptr;
 static PFN_Draw        g_origDraw        = nullptr;
-static PFN_DrawIndexedInstanced g_origDrawIndexedInstanced = nullptr;
-static PFN_DrawInstanced        g_origDrawInstanced        = nullptr;
-
-// Watchdog: a tonemap draw with a depth SRV armed but no RTGI run means the
-// engine took a draw path we do not hook (instanced draws are covered below,
-// DrawAuto / indirect are not). Logged once so "ultra silently did nothing"
-// cannot hide in a healthy-looking log.
-static volatile LONG g_tonemapArms = 0;
-static volatile LONG g_rtgiRuns    = 0;
-static volatile LONG g_rtgiWarned  = 0;
-static volatile LONG g_rtgiRejects = 0;
-
-// A draw the RTGI pass may take over has to look like the fullscreen tonemap
-// pass: a handful of vertices, no instancing. The PS-identity guard alone is
-// not enough - once instanced draws are hooked, grass/rocks instances can be
-// dispatched while g_curPS still points at the tonemap shader (deferred command
-// lists do not rebind a PS every frame), and feeding that geometry through the
-// RTGI fullscreen shaders visibly scrambles the scene.
-static bool RtgiEligible(UINT count, UINT instances) {
-  return count > 0 && count <= 16 && instances <= 1;
-}
-
-static void NoteRejectedRtgiDraw(UINT count, UINT instances) {
-  if (InterlockedIncrement(&g_rtgiRejects) <= 5) {
-    Log("[GP] RTGI guard: skipped draw count=%u instances=%u (not fullscreen-sized)\n",
-        count, instances);
-  }
-}
-
-static void NoteTonemapDrawArmed() {
-  LONG arms = InterlockedIncrement(&g_tonemapArms);
-  if (arms >= 240 && InterlockedCompareExchange(&g_rtgiRuns, 0, 0) == 0 &&
-      InterlockedExchange(&g_rtgiWarned, 1) == 0) {
-    Log("[GP] WARN: %ld tonemap draws with a depth SRV armed but the RTGI pass never ran "
-        "(draw path not hooked: DrawAuto / *Indirect / a different context). "
-        "Ultra mode is not producing its GI pass.\n", arms);
-  }
-}
 
 static void ReleaseRtgiResources() {
   if (g_rtgiSRVA) { g_rtgiSRVA->Release(); g_rtgiSRVA = nullptr; }
@@ -759,7 +609,6 @@ static void ExecuteMultiPassRtgi(ID3D11DeviceContext* ctx, DrawFn&& doDraw) {
     if (stale) stale->Release();
     g_lastSlot0SRV = nullptr;
 
-    InterlockedIncrement(&g_rtgiRuns);
     if (InterlockedIncrement(&g_rtgiRunLogs) <= 3) {
       Log("[GP] Multi-Pass RTGI executed (%ux%u -> %ux%u)\n", halfW, halfH, (UINT)origVp.Width, (UINT)origVp.Height);
     }
@@ -776,48 +625,18 @@ static void ExecuteMultiPassRtgi(ID3D11DeviceContext* ctx, DrawFn&& doDraw) {
 
 static void STDMETHODCALLTYPE Hook_Draw(ID3D11DeviceContext* ctx, UINT vCount, UINT vStart) {
   if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
-    if (RtgiEligible(vCount, 1)) {
-      ExecuteMultiPassRtgi(ctx, [&]() { g_origDraw(ctx, vCount, vStart); });
-      return;
-    }
-    NoteRejectedRtgiDraw(vCount, 1);
+    ExecuteMultiPassRtgi(ctx, [&]() { g_origDraw(ctx, vCount, vStart); });
+    return;
   }
   g_origDraw(ctx, vCount, vStart);
 }
 
 static void STDMETHODCALLTYPE Hook_DrawIndexed(ID3D11DeviceContext* ctx, UINT iCount, UINT iStart, INT vBase) {
   if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
-    if (RtgiEligible(iCount, 1)) {
-      ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawIndexed(ctx, iCount, iStart, vBase); });
-      return;
-    }
-    NoteRejectedRtgiDraw(iCount, 1);
+    ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawIndexed(ctx, iCount, iStart, vBase); });
+    return;
   }
   g_origDrawIndexed(ctx, iCount, iStart, vBase);
-}
-
-static void STDMETHODCALLTYPE Hook_DrawIndexedInstanced(
-    ID3D11DeviceContext* ctx, UINT iCount, UINT iStart, UINT iInst, INT vBase) {
-  if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
-    if (RtgiEligible(iCount, iInst)) {
-      ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawIndexedInstanced(ctx, iCount, iStart, iInst, vBase); });
-      return;
-    }
-    NoteRejectedRtgiDraw(iCount, iInst);
-  }
-  g_origDrawIndexedInstanced(ctx, iCount, iStart, iInst, vBase);
-}
-
-static void STDMETHODCALLTYPE Hook_DrawInstanced(
-    ID3D11DeviceContext* ctx, UINT vCount, UINT vStart, UINT vInst) {
-  if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
-    if (RtgiEligible(vCount, vInst)) {
-      ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawInstanced(ctx, vCount, vStart, vInst); });
-      return;
-    }
-    NoteRejectedRtgiDraw(vCount, vInst);
-  }
-  g_origDrawInstanced(ctx, vCount, vStart, vInst);
 }
 
 static bool IsSssmShader(ID3D11PixelShader* ps) {
@@ -852,9 +671,6 @@ static void STDMETHODCALLTYPE Hook_PSSetShader(
   g_origPSSetShader(ctx, ps, ppCls, numCls);
   if (g_inRtgiPass || !g_enableSsgi) return;
   g_curPS = ps;
-  if (g_enableMultiPassRtgi && ps && ps == g_tonemapPS && g_ssgiDepthSRV) {
-    NoteTonemapDrawArmed();
-  }
   if (IsSssmShader(ps) && g_lastSlot0SRV) {
     CaptureDepthSrv(g_lastSlot0SRV);
   } else if (!g_enableMultiPassRtgi && ps && ps == g_tonemapPS && g_ssgiDepthSRV) {
@@ -875,20 +691,16 @@ static void HookContext(ID3D11DeviceContext* ctx) {
   if (!ctx) return;
   void** vt = *(void***)ctx;
   if (!vt) return;
-  // Always wrapped, even with nothing configured: the wrappers fall through to the
-  // real function after one boolean check, and the Unmap wrapper is what runs the
-  // 2 s config poll. Gating the patch on NeedContextHook() (as this used to do)
-  // made a config file dropped in after launch impossible to pick up.
-  PatchSlot(vt, 14, (void*)Hook_Map, (void**)&g_origMap);
-  PatchSlot(vt, 15, (void*)Hook_Unmap, (void**)&g_origUnmap);
+  if (NeedContextHook()) {
+    PatchSlot(vt, 14, (void*)Hook_Map, (void**)&g_origMap);
+    PatchSlot(vt, 15, (void*)Hook_Unmap, (void**)&g_origUnmap);
+  }
   if (g_enableSsgi) {
     PatchSlot(vt, 8, (void*)Hook_PSSetShaderResources, (void**)&g_origPSSetSRVs);
     PatchSlot(vt, 9, (void*)Hook_PSSetShader, (void**)&g_origPSSetShader);
     if (g_enableMultiPassRtgi) {
       PatchSlot(vt, 12, (void*)Hook_DrawIndexed, (void**)&g_origDrawIndexed);
       PatchSlot(vt, 13, (void*)Hook_Draw, (void**)&g_origDraw);
-      PatchSlot(vt, 20, (void*)Hook_DrawIndexedInstanced, (void**)&g_origDrawIndexedInstanced);
-      PatchSlot(vt, 21, (void*)Hook_DrawInstanced, (void**)&g_origDrawInstanced);
     }
   }
 }
@@ -913,10 +725,7 @@ static void HookDevice(ID3D11Device* dev) {
   void** vt = *(void***)dev;
   if (!vt) return;
   PatchSlot(vt, 15, (void*)Hook_CreatePixelShader, (void**)&g_origCPS);
-  // Deferred contexts get the same always-on Map/Unmap wrappers; these device
-  // hooks only fire when the engine creates a deferred context, so they cost
-  // nothing per frame and are installed unconditionally for consistency.
-  {
+  if (NeedContextHook() || g_enableSsgi) {
     PatchSlot(vt, 27, (void*)Hook_D0, (void**)&g_pd[0]);
     ID3D11Device1* d1 = nullptr;
     if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D11Device1), (void**)&d1)) && d1) {
@@ -934,7 +743,7 @@ static void HookDevice(ID3D11Device* dev) {
       d1->Release();
     }
   }
-  Log("[GP] device hooks active (%s, ctxHook=%d, mapHook=1, ssgi=%d)\n",
+  Log("[GP] device hooks active (%s, ctxHook=%d, ssgi=%d)\n",
       g_usingDxvk ? "DXVK Vulkan" : "Native DX11", (int)NeedContextHook(), (int)g_enableSsgi);
 }
 

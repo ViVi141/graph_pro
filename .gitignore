@@ -47,6 +47,7 @@ Release/
 *.exe
 
 # --- Runtime logs / dumps next to tools ---
+python_d3d11.log
 *.log
 inject/_*.log
 inject/counter/GP_*.log

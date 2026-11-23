@@ -112,7 +112,7 @@ $staleGp = @(
     'GP_sssm_veryhigh.dxbc', 'GP_sssm_high.dxbc', 'GP_ssao.dxbc', 'GP_super_pbr.dxbc',
     'GP_ssgi.txt', 'GP_rtgi_trace.dxbc', 'GP_rtgi_denoise.dxbc',
     'GP_amb.txt', 'GP_amb_stylized.txt', 'GP_expo.txt', 'GP_spec.txt',
-    'GP_backend.txt', 'GP_enable_dump.txt', 'GP_dump.txt', 'GP_dump_ps.txt', 'GP_dump_bytes.txt',
+    'GP_backend.txt', 'GP_enable_dump.txt', 'GP_dump.txt', 'GP_dump_ps.txt',
     'GP_shot.raw', 'GP_universal.log',
     # classic line: payloads, presets, probes
     'GP_tonemap_agx.dxbc', 'GP_tonemap_agx_neutral.dxbc', 'GP_fsr1.dxbc',
@@ -131,9 +131,6 @@ foreach ($f in $staleGp) {
     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
 }
 Get-ChildItem -LiteralPath $Game -Filter 'GP_up_in_*.raw' -File -ErrorAction SilentlyContinue | Remove-Item -Force
-# Captured shader blobs (GP_dump_bytes.txt): stale ones must not shade a new run.
-$psdump = Join-Path $Game 'GP_psdump'
-if (Test-Path -LiteralPath $psdump) { Remove-Item -LiteralPath $psdump -Recurse -Force }
 # Stale chained-DXVK copy: the "off" deployment stages DXVK as d3d11.dll and
 # must not leave a second DXVK backend next to it.
 $staleBackend = Join-Path $Game 'gp_dxvk_d3d11.dll'

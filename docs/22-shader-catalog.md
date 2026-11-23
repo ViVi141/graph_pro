@@ -81,9 +81,14 @@ PBR (PSSSSMSuper) hits: 3
 - 所以审计的正确做法是 `verify_shaders.py` 这种"清单 × 真实日志"的交叉核对，
   而不是拿清单对着缓存的静态列表。
 
-为了让目录补全这三份，代理新增了 `GP_dump_bytes.txt`（可选）：置入后每次
-`CreatePixelShader` 都把 blob 落到 `GP_psdump\<size>_<crc>.dxbc`，跑一次游戏
-就能把运行时全集抓齐，再喂给 `shader_catalog.py`。
+这三份运行时 blob 已经抓到过一次：开发时给代理临时加过 `GP_dump_bytes.txt`
+开关（置入后每次 `CreatePixelShader` 把 blob 落到 `GP_psdump\<size>_<crc>.dxbc`），
+一次运行得到 **234 个运行时 PS**，其中就有 16264/17992/17960。它们只有 3 个 chunk、
+没有 RDEF，所以只能反汇编、拿不到变量名。
+
+> 该开关随后与整个代理修复批次一起**回滚**了（见 RESULTS 2026-11-23 收敛条目）：
+> 出问题的不是它，但"能在真实进程里改渲染"的改动在验证不充分时不应留在交付线上。
+> 需要补全运行时目录时，把这段代码加回去跑一次即可，逻辑只有十几行。
 
 **顺带查出的真问题**：部署在游戏目录里的 `GP_super_pbr.dxbc` 是 **16052 B**，
 而 `dist\` 里的是 **16124 B**——也就是说现网跑的是更早一次编译的 PBR 载荷。
