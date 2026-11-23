@@ -180,20 +180,23 @@ float4 main(PSIn i) : SV_Target
     float a2 = max(a * a, 1e-4f);
 
     // 4. Environment Map Reflection (t7) + Procedural 3D Dual-Hemisphere Sky/Ground IBL
+    // Arma 3's vanilla t7 is a tiny 2009 2D-projected static photo (env_land_co.paa) that looks distorted/upside-down
+    // at sharp mips on building windows. Biasing envMip >= 3.5 turns t7 into a smooth ambient color probe while
+    // procEnv provides an always-right-side-up 3D sky-horizon-ground reflection!
     float3 R = reflect(-V, N);
     float2 envUV = R.xy * float2(0.5f, -0.5f) + 0.5f;
-    float  envMip = pow(1.0f - saturate(specPower * 0.001f), 10.0f) * 8.0f;
+    float  envMip = max(pow(1.0f - saturate(specPower * 0.001f), 10.0f) * 8.0f, 3.5f);
     float4 envSample = t7.SampleLevel(s7, envUV, envMip);
     float3 envMapCol = envSample.rgb * exp2((1.0f - envSample.a) * 4.0f) * cb1[2].xyz;
 
-    // 3D Sky/Horizon/Ground IBL along reflection vector R (gives real view-dependent sky bounce on metal/paint!)
+    // 3D Sky/Horizon/Ground IBL along reflection vector R (always physically right-side-up!)
     float3 skyAmb = cb5[1].xyz;
     float3 midAmb = cb5[9].xyz;
     float3 gndAmb = cb5[2].xyz;
     float3 procEnv = (R.y >= 0.0f)
-        ? lerp(midAmb, skyAmb * 1.45f, saturate(R.y))
-        : lerp(midAmb, gndAmb * 0.85f, saturate(-R.y));
-    float3 envCombined = max(envMapCol * cb6[0].xyz * 2.0f, procEnv * 0.65f);
+        ? lerp(midAmb, skyAmb * 1.35f, saturate(R.y))
+        : lerp(midAmb, gndAmb * 0.80f, saturate(-R.y));
+    float3 envCombined = lerp(procEnv * 0.70f, envMapCol * cb6[0].xyz * 1.15f, 0.35f);
 
     // Original Fresnel LUT blended with physical Roughness-Aware Schlick Fresnel
     float fresnelLut = t6.Sample(s6, float2(saturate(dot(N, R)), 0.5f)).x;
