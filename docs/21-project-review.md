@@ -355,6 +355,12 @@ powershell -File tools\build_present.ps1
 
 **2026-11-23 夜间补记（Universal 线首次代码评审 + 修复批次）**
 
+> **补充（同日更晚）：这一批代理侧改动已整体回滚。** 部署后在真实客户端上出现
+> 植被/岩石闪动与一次崩溃（崩溃本身是游戏目录半部署导致的，见 RESULTS 收敛条目），
+> 无法在不折腾客户端的前提下逐项定位，因此 `inject/universal/d3d11_universal.cpp`
+> 回到 `1345aed`。下面 §「本次修掉的」中 1、2、3、4 条（迟到配置、轮询改时间戳、
+> 映射表回收、实例化绘制钩子）**当前不在交付线里**；目录、校验、清单与文档部分保留。
+
 评审范围：`inject/universal/d3d11_universal.cpp`（911 + 本次改动行）、四档画质包与 12 个
 DXBC 载荷、`install.ps1` / `uninstall.ps1` / `GraphPro_Manager.ps1`、`dist/` 发布树、
 `tools/universal_smoke_test.py` / `verify_universal.ps1`。上一段说"该线需单独复核"，
