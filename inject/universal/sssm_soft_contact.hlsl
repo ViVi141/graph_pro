@@ -93,8 +93,13 @@ float4 main(PSIn i) : SV_Target
     // Pre-Lighting Screen-Space Contact Shadows (SSCS)
     // Runs ONLY in near cascade (1.2m..35m) on pixels still receiving sunlight.
     // Attenuates ONLY direct sunlight (ambient sky light remains 100% intact).
+    // Uses fwidth(depth) smoothness mask so thin alpha-tested grass cards don't
+    // self-shadow, while solid ground/curbs/buildings/vehicles stay grounded.
     // -------------------------------------------------------------------------
-    if (shadow > 0.05f && depth > 1.2f && depth < 35.0f)
+    float depthGrad = max(abs(ddx(depth)), abs(ddy(depth))) / max(depth, 0.5f);
+    float solidSurfaceMask = 1.0f - smoothstep(0.012f, 0.045f, depthGrad);
+
+    if (shadow > 0.05f && depth > 1.2f && depth < 35.0f && solidSurfaceMask > 0.02f)
     {
         float3 rawSun = -pp[47].xyz; // Shadowmap Z increases away from sun -> -row2 points toward sun
         float  sunLen = length(rawSun);
@@ -105,19 +110,19 @@ float4 main(PSIn i) : SV_Target
             // Fade in past 1st-person weapon viewmodel (1.2..2.5m), fade out 22..35m
             float nearFade = smoothstep(1.2f, 2.5f, depth);
             float farFade  = 1.0f - smoothstep(22.0f, 35.0f, depth);
-            float distFade = nearFade * farFade;
+            float distFade = nearFade * farFade * solidSurfaceMask;
 
             // Adaptive ray length & thickness proportional to view distance
-            float rayLen    = clamp(depth * 0.060f, 0.35f, 1.40f);
-            float stepSize  = rayLen / 12.0f; // 12 steps for crisp grass/curb/building contact grounding
-            float minBias   = 0.008f + depth * 0.0018f;
-            float maxThick  = 0.14f  + depth * 0.022f;
+            float rayLen    = clamp(depth * 0.045f, 0.25f, 1.10f);
+            float stepSize  = rayLen / 10.0f;
+            float minBias   = 0.025f + depth * 0.0040f; // Enough bias to skip micro grass-blade self-hits
+            float maxThick  = 0.16f  + depth * 0.022f;
 
             float contactOcc = 0.0f;
-            float t = (0.25f + 0.75f * noise) * stepSize;
+            float t = (0.30f + 0.70f * noise) * stepSize;
 
             [unroll]
-            for (int s = 0; s < 12; s++)
+            for (int s = 0; s < 10; s++)
             {
                 float3 sp = viewPos.xyz + sunDirView * t;
                 if (sp.z > 0.2f)
@@ -133,8 +138,8 @@ float4 main(PSIn i) : SV_Target
                         if (dz > minBias && dz < maxThick)
                         {
                             // Smooth falloff near edge of thickness window and ray end
-                            float thickW = 1.0f - smoothstep(maxThick * 0.5f, maxThick, dz);
-                            float rayW   = 1.0f - ((float)s / 12.0f) * 0.30f;
+                            float thickW = 1.0f - smoothstep(maxThick * 0.45f, maxThick, dz);
+                            float rayW   = 1.0f - ((float)s / 10.0f) * 0.35f;
                             contactOcc   = max(contactOcc, thickW * rayW);
                         }
                     }
@@ -142,8 +147,8 @@ float4 main(PSIn i) : SV_Target
                 t += stepSize;
             }
 
-            // Cap at 0.85 so micro-contact shadows look grounded and dimensional
-            shadow *= (1.0f - contactOcc * 0.85f * distFade);
+            // Cap at 0.72 so contact shadows ground solid surfaces naturally without sooty blotches
+            shadow *= (1.0f - contactOcc * 0.72f * distFade);
         }
     }
 

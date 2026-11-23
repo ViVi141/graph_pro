@@ -97,7 +97,7 @@ float4 main(PSIn i) : SV_Target
     float3 cW = max(t_scene.Sample(s_scene, i.uv + float2(-ts.x,  0.0f)).rgb, 0.0f);
     float3 cR = max(t_scene.Sample(s_scene, i.uv + float2( ts.x,  0.0f)).rgb, 0.0f);
 
-    float3 sharp = ApplyCAS(cE, cN, cW, cR, cS, 0.46f);
+    float3 sharp = ApplyCAS(cE, cN, cW, cR, cS, 0.32f);
 
     // 2. Wide-radius HDR Local Contrast / Clarity (4-tap diagonal @ 3.2px)
     // Removes Arma 3's flat midtone haze and sculpts foliage, rocks, buildings, and weapon details
@@ -109,9 +109,9 @@ float4 main(PSIn i) : SV_Target
     );
     float lC = Luma(sharp);
     float lB = Luma(blur);
-    float detail = clamp(lC - lB, -0.18f, 0.18f);
-    float edgeMask = 1.0f - saturate(abs(lC - lB) * 2.5f);
-    float3 sceneClean = max(sharp + sharp * (detail * 0.52f * edgeMask / max(lC, 0.05f)), 0.0f);
+    float detail = clamp(lC - lB, -0.14f, 0.14f);
+    float edgeMask = 1.0f - saturate(abs(lC - lB) * 3.2f);
+    float3 sceneClean = max(sharp + sharp * (detail * 0.36f * edgeMask / max(lC, 0.06f)), 0.0f);
 
     // 3. Combine with Physical HDR Bloom (from our upgraded BloomInitDownsample4x)
     float3 glowRaw = t_glow.Sample(s_glow, i.uv).rgb;
