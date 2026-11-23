@@ -70,7 +70,7 @@ static bool g_enableSsgi = false;
 static ID3D11Device* g_dev = nullptr;
 static ID3D11DeviceContext* g_ctx = nullptr;
 
-// SSGI zero-copy depth forwarding (captures linear depth SRV from SSSM pass -> binds to Tonemap t2)
+// SSGI / Multi-Pass RTGI zero-copy depth forwarding & half-res denoiser pipeline
 static ID3D11PixelShader*        g_sssmPS[4] = {};
 static int                       g_sssmCount = 0;
 static ID3D11PixelShader*        g_tonemapPS = nullptr;
@@ -78,6 +78,22 @@ static ID3D11ShaderResourceView* g_lastSlot0SRV = nullptr;
 static ID3D11ShaderResourceView* g_ssgiDepthSRV = nullptr;
 static ID3D11PixelShader*        g_curPS = nullptr;
 static volatile long             g_ssgiBindLogs = 0;
+
+// Multi-Pass Half-Res RTGI (Pass 1 Trace + Pass 2 À-Trous Denoise -> t3 of Tonemap)
+static std::vector<uint8_t>      g_rtgiTraceBytes;
+static std::vector<uint8_t>      g_rtgiDenoiseBytes;
+static bool                      g_enableMultiPassRtgi = false;
+static ID3D11PixelShader*        g_rtgiTracePS   = nullptr;
+static ID3D11PixelShader*        g_rtgiDenoisePS = nullptr;
+static ID3D11Texture2D*          g_rtgiTexA = nullptr;
+static ID3D11RenderTargetView*   g_rtgiRTVA = nullptr;
+static ID3D11ShaderResourceView* g_rtgiSRVA = nullptr;
+static ID3D11Texture2D*          g_rtgiTexB = nullptr;
+static ID3D11RenderTargetView*   g_rtgiRTVB = nullptr;
+static ID3D11ShaderResourceView* g_rtgiSRVB = nullptr;
+static UINT                      g_rtgiW = 0, g_rtgiH = 0;
+static bool                      g_inRtgiPass = false;
+static volatile long             g_rtgiRunLogs = 0;
 
 // ---------------------------------------------------------------- Helpers
 static void Log(const char* fmt, ...) {
@@ -229,6 +245,13 @@ static void LoadInitialConfig() {
   g_enableDump = GetFileAttributesA((dir + "\\GP_enable_dump.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   g_dumpPs     = GetFileAttributesA((dir + "\\GP_dump_ps.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   g_enableSsgi = GetFileAttributesA((dir + "\\GP_ssgi.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+  if (g_enableSsgi &&
+      LoadFile(dir + "\\GP_rtgi_trace.dxbc", g_rtgiTraceBytes) &&
+      LoadFile(dir + "\\GP_rtgi_denoise.dxbc", g_rtgiDenoiseBytes)) {
+    g_enableMultiPassRtgi = true;
+    Log("[GP] loaded Multi-Pass RTGI payloads (trace=%zu B, denoise=%zu B)\n",
+        g_rtgiTraceBytes.size(), g_rtgiDenoiseBytes.size());
+  }
   ReloadDynamicConfig(true);
   Log("[GP] config: backend=%s amb=%.2f/%.2f tint=%.2f/%.2f expo=%u(%.2f..%.2f) spec=%d(%.2f)\n",
       g_backendMode, g_ambScale, g_aeScale, g_tintR, g_tintB,
@@ -425,11 +448,158 @@ static void PatchSlot(void** vt, int idx, void* fn, void** orig) {
   VirtualProtect(&vt[idx], sizeof(void*), old, &tmp);
 }
 
-// ---------------------------------------------------------------- SSGI Depth SRV Forwarding Hooks (slot 8 & 9)
+// ---------------------------------------------------------------- SSGI / Multi-Pass RTGI Hooks (slot 8, 9, 12, 13)
 typedef void (STDMETHODCALLTYPE *PFN_PSSetSRVs)(ID3D11DeviceContext*, UINT, UINT, ID3D11ShaderResourceView* const*);
 typedef void (STDMETHODCALLTYPE *PFN_PSSetShader)(ID3D11DeviceContext*, ID3D11PixelShader*, ID3D11ClassInstance* const*, UINT);
+typedef void (STDMETHODCALLTYPE *PFN_DrawIndexed)(ID3D11DeviceContext*, UINT, UINT, INT);
+typedef void (STDMETHODCALLTYPE *PFN_Draw)(ID3D11DeviceContext*, UINT, UINT);
 static PFN_PSSetSRVs   g_origPSSetSRVs   = nullptr;
 static PFN_PSSetShader g_origPSSetShader = nullptr;
+static PFN_DrawIndexed g_origDrawIndexed = nullptr;
+static PFN_Draw        g_origDraw        = nullptr;
+
+static void ReleaseRtgiResources() {
+  if (g_rtgiSRVA) { g_rtgiSRVA->Release(); g_rtgiSRVA = nullptr; }
+  if (g_rtgiRTVA) { g_rtgiRTVA->Release(); g_rtgiRTVA = nullptr; }
+  if (g_rtgiTexA) { g_rtgiTexA->Release(); g_rtgiTexA = nullptr; }
+  if (g_rtgiSRVB) { g_rtgiSRVB->Release(); g_rtgiSRVB = nullptr; }
+  if (g_rtgiRTVB) { g_rtgiRTVB->Release(); g_rtgiRTVB = nullptr; }
+  if (g_rtgiTexB) { g_rtgiTexB->Release(); g_rtgiTexB = nullptr; }
+  g_rtgiW = g_rtgiH = 0;
+}
+
+static bool EnsureRtgiResources(ID3D11DeviceContext* ctx, UINT w, UINT h) {
+  if (!ctx || w == 0 || h == 0) return false;
+  ID3D11Device* dev = nullptr;
+  ctx->GetDevice(&dev);
+  if (!dev) return false;
+
+  if (!g_rtgiTracePS && !g_rtgiTraceBytes.empty() && g_origCPS) {
+    g_origCPS(dev, g_rtgiTraceBytes.data(), g_rtgiTraceBytes.size(), nullptr, &g_rtgiTracePS);
+  }
+  if (!g_rtgiDenoisePS && !g_rtgiDenoiseBytes.empty() && g_origCPS) {
+    g_origCPS(dev, g_rtgiDenoiseBytes.data(), g_rtgiDenoiseBytes.size(), nullptr, &g_rtgiDenoisePS);
+  }
+  if (!g_rtgiTracePS || !g_rtgiDenoisePS) { dev->Release(); return false; }
+
+  if (g_rtgiW == w && g_rtgiH == h && g_rtgiRTVA && g_rtgiSRVA && g_rtgiRTVB && g_rtgiSRVB) {
+    dev->Release();
+    return true;
+  }
+
+  ReleaseRtgiResources();
+  D3D11_TEXTURE2D_DESC td{};
+  td.Width = w;
+  td.Height = h;
+  td.MipLevels = 1;
+  td.ArraySize = 1;
+  td.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  td.SampleDesc.Count = 1;
+  td.Usage = D3D11_USAGE_DEFAULT;
+  td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+  bool ok =
+      SUCCEEDED(dev->CreateTexture2D(&td, nullptr, &g_rtgiTexA)) &&
+      SUCCEEDED(dev->CreateRenderTargetView(g_rtgiTexA, nullptr, &g_rtgiRTVA)) &&
+      SUCCEEDED(dev->CreateShaderResourceView(g_rtgiTexA, nullptr, &g_rtgiSRVA)) &&
+      SUCCEEDED(dev->CreateTexture2D(&td, nullptr, &g_rtgiTexB)) &&
+      SUCCEEDED(dev->CreateRenderTargetView(g_rtgiTexB, nullptr, &g_rtgiRTVB)) &&
+      SUCCEEDED(dev->CreateShaderResourceView(g_rtgiTexB, nullptr, &g_rtgiSRVB));
+  dev->Release();
+  if (!ok) {
+    ReleaseRtgiResources();
+    return false;
+  }
+  g_rtgiW = w;
+  g_rtgiH = h;
+  Log("[GP] Multi-Pass RTGI half-res RTs ready (%ux%u R16G16B16A16F)\n", w, h);
+  return true;
+}
+
+template <typename DrawFn>
+static void ExecuteMultiPassRtgi(ID3D11DeviceContext* ctx, DrawFn&& doDraw) {
+  g_inRtgiPass = true;
+
+  D3D11_VIEWPORT origVp{};
+  UINT numVp = 1;
+  ctx->RSGetViewports(&numVp, &origVp);
+  UINT halfW = (numVp >= 1 && origVp.Width >= 2.0f) ? (UINT)(origVp.Width * 0.5f) : 0;
+  UINT halfH = (numVp >= 1 && origVp.Height >= 2.0f) ? (UINT)(origVp.Height * 0.5f) : 0;
+
+  if (halfW >= 64 && halfH >= 64 && EnsureRtgiResources(ctx, halfW, halfH)) {
+    ID3D11RenderTargetView* origRTV = nullptr;
+    ID3D11DepthStencilView* origDSV = nullptr;
+    ctx->OMGetRenderTargets(1, &origRTV, &origDSV);
+
+    ID3D11ShaderResourceView* origSRVs[4] = {};
+    ctx->PSGetShaderResources(0, 4, origSRVs);
+
+    ID3D11ShaderResourceView* nullSRVs[4] = { nullptr, nullptr, nullptr, nullptr };
+    D3D11_VIEWPORT halfVp = origVp;
+    halfVp.TopLeftX = 0.0f;
+    halfVp.TopLeftY = 0.0f;
+    halfVp.Width  = (float)halfW;
+    halfVp.Height = (float)halfH;
+
+    // Pass 1: Half-Res 32-Ray Horizon-Tracked RTGI + Multi-Meter GTAO
+    g_origPSSetSRVs(ctx, 0, 4, nullSRVs);
+    ctx->OMSetRenderTargets(1, &g_rtgiRTVA, nullptr);
+    ctx->RSSetViewports(1, &halfVp);
+    ID3D11ShaderResourceView* p1SRVs[3] = { origSRVs[0], nullptr, g_ssgiDepthSRV };
+    g_origPSSetSRVs(ctx, 0, 3, p1SRVs);
+    g_origPSSetShader(ctx, g_rtgiTracePS, nullptr, 0);
+    doDraw();
+
+    // Pass 2: Half-Res 5x5 Edge-Aware A-Trous Spatial Ray Reconstructor (Denoiser)
+    g_origPSSetSRVs(ctx, 0, 4, nullSRVs);
+    ctx->OMSetRenderTargets(1, &g_rtgiRTVB, nullptr);
+    ID3D11ShaderResourceView* p2SRVs[3] = { g_rtgiSRVA, nullptr, g_ssgiDepthSRV };
+    g_origPSSetSRVs(ctx, 0, 3, p2SRVs);
+    g_origPSSetShader(ctx, g_rtgiDenoisePS, nullptr, 0);
+    doDraw();
+
+    // Pass 3: Restore Arma 3's Exact Full-Res State + Bind t2 (Depth) & t3 (Denoised RTGI)
+    g_origPSSetSRVs(ctx, 0, 4, nullSRVs);
+    ctx->OMSetRenderTargets(1, &origRTV, origDSV);
+    ctx->RSSetViewports(1, &origVp);
+    ID3D11ShaderResourceView* p3SRVs[4] = { origSRVs[0], origSRVs[1], g_ssgiDepthSRV, g_rtgiSRVB };
+    g_origPSSetSRVs(ctx, 0, 4, p3SRVs);
+    g_origPSSetShader(ctx, g_tonemapPS, nullptr, 0);
+    doDraw();
+
+    // Unbind t2/t3 cleanly to prevent any downstream resource hazards
+    ID3D11ShaderResourceView* clearExtra[2] = { nullptr, nullptr };
+    g_origPSSetSRVs(ctx, 2, 2, clearExtra);
+
+    if (InterlockedIncrement(&g_rtgiRunLogs) <= 3) {
+      Log("[GP] Multi-Pass RTGI executed (%ux%u -> %ux%u)\n", halfW, halfH, (UINT)origVp.Width, (UINT)origVp.Height);
+    }
+
+    for (int k = 0; k < 4; k++) if (origSRVs[k]) origSRVs[k]->Release();
+    if (origRTV) origRTV->Release();
+    if (origDSV) origDSV->Release();
+  } else {
+    doDraw();
+  }
+
+  g_inRtgiPass = false;
+}
+
+static void STDMETHODCALLTYPE Hook_Draw(ID3D11DeviceContext* ctx, UINT vCount, UINT vStart) {
+  if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
+    ExecuteMultiPassRtgi(ctx, [&]() { g_origDraw(ctx, vCount, vStart); });
+    return;
+  }
+  g_origDraw(ctx, vCount, vStart);
+}
+
+static void STDMETHODCALLTYPE Hook_DrawIndexed(ID3D11DeviceContext* ctx, UINT iCount, UINT iStart, INT vBase) {
+  if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
+    ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawIndexed(ctx, iCount, iStart, vBase); });
+    return;
+  }
+  g_origDrawIndexed(ctx, iCount, iStart, vBase);
+}
 
 static bool IsSssmShader(ID3D11PixelShader* ps) {
   if (!ps) return false;
@@ -449,7 +619,7 @@ static void CaptureDepthSrv(ID3D11ShaderResourceView* srv) {
 
 static void STDMETHODCALLTYPE Hook_PSSetShaderResources(
     ID3D11DeviceContext* ctx, UINT startSlot, UINT numViews, ID3D11ShaderResourceView* const* ppViews) {
-  if (g_enableSsgi && ppViews && startSlot == 0 && numViews >= 1 && ppViews[0]) {
+  if (!g_inRtgiPass && g_enableSsgi && ppViews && startSlot == 0 && numViews >= 1 && ppViews[0]) {
     g_lastSlot0SRV = ppViews[0];
     if (IsSssmShader(g_curPS)) {
       CaptureDepthSrv(ppViews[0]);
@@ -461,11 +631,11 @@ static void STDMETHODCALLTYPE Hook_PSSetShaderResources(
 static void STDMETHODCALLTYPE Hook_PSSetShader(
     ID3D11DeviceContext* ctx, ID3D11PixelShader* ps, ID3D11ClassInstance* const* ppCls, UINT numCls) {
   g_origPSSetShader(ctx, ps, ppCls, numCls);
-  if (!g_enableSsgi) return;
+  if (g_inRtgiPass || !g_enableSsgi) return;
   g_curPS = ps;
   if (IsSssmShader(ps) && g_lastSlot0SRV) {
     CaptureDepthSrv(g_lastSlot0SRV);
-  } else if (ps && ps == g_tonemapPS && g_ssgiDepthSRV) {
+  } else if (!g_enableMultiPassRtgi && ps && ps == g_tonemapPS && g_ssgiDepthSRV) {
     ID3D11ShaderResourceView* d = g_ssgiDepthSRV;
     g_origPSSetSRVs(ctx, 2, 1, &d);
     static volatile long bindCount = 0;
@@ -490,6 +660,10 @@ static void HookContext(ID3D11DeviceContext* ctx) {
   if (g_enableSsgi) {
     PatchSlot(vt, 8, (void*)Hook_PSSetShaderResources, (void**)&g_origPSSetSRVs);
     PatchSlot(vt, 9, (void*)Hook_PSSetShader, (void**)&g_origPSSetShader);
+    if (g_enableMultiPassRtgi) {
+      PatchSlot(vt, 12, (void*)Hook_DrawIndexed, (void**)&g_origDrawIndexed);
+      PatchSlot(vt, 13, (void*)Hook_Draw, (void**)&g_origDraw);
+    }
   }
 }
 

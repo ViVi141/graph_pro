@@ -28,12 +28,14 @@ function Get-Status([string]$gameDir) {
     }
     $hasD3d = Test-Path (Join-Path $gameDir 'd3d11.dll')
     $hasDxvkChain = Test-Path (Join-Path $gameDir 'gp_dxvk_d3d11.dll')
+    $hasRtgi = Test-Path (Join-Path $gameDir 'GP_rtgi_trace.dxbc')
     $hasSsgi = Test-Path (Join-Path $gameDir 'GP_ssgi.txt')
     $hasRepl = Test-Path (Join-Path $gameDir 'GP_replace.txt')
     $hasBak  = Test-Path (Join-Path $gameDir '_gp_universal_backup')
 
     if (-not $hasD3d) { return '原版纯净状态（未安装）' }
-    $mode = if ($hasSsgi) { '已安装：DXVK + 旗舰画质 (3D PBR + 线性HDR SSGI)' }
+    $mode = if ($hasRtgi) { '已安装：DXVK + 终极旗舰画质 (3-Pass 32-Ray RTGI + À-Trous降噪 + 物理大气散射 + 3D PBR)' }
+            elseif ($hasSsgi) { '已安装：DXVK + SSGI 画质 (3D PBR + 单Pass SSGI)' }
             elseif ($hasRepl) { '已安装：DXVK + 新一代画质 (3D PBR + AgX v4.2)' }
             elseif (-not $hasDxvkChain) { '已安装：纯净 DXVK 3.1.1 性能底座（原版画面）' }
             else { '已安装：Universal Proxy' }
@@ -71,7 +73,7 @@ while ($true) {
     Write-Host '----------------------------------------------------------------------' -ForegroundColor DarkGray
     Write-Host '  [1] 一键纯净性能加速（DXVK 3.1.1 Vulkan，100% 保留原版画面，零代理开销）' -ForegroundColor Green
     Write-Host '  [2] 一键性能 + 新一代画质（DXVK + 路线A 3D GGX PBR + AgX v4.2 + HDR Bloom + 柔和阴影）' -ForegroundColor Cyan
-    Write-Host '  [3] 一键性能 + 旗舰画质（DXVK + 路线A 3D PBR + 路线B 线性HDR SSGI 间接光反弹）' -ForegroundColor Magenta
+    Write-Host '  [3] 一键性能 + 终极旗舰画质（DXVK + 三Pass 32射线RTGI + À-Trous光线重建 + 物理大气散射 + 3D PBR）' -ForegroundColor Magenta
     Write-Host '  [4] 一键轻量画质（仅 AgX + HDR Bloom + Natural SSAO，不含接触阴影/SSGI）' -ForegroundColor DarkCyan
     Write-Host '  [5] 一键完全重置 / 卸载还原（删除全部注入文件并 100% 恢复原始配置）' -ForegroundColor Red
     Write-Host '  [0] 退出' -ForegroundColor DarkGray
@@ -96,7 +98,7 @@ while ($true) {
             }
             '3' {
                 $tier = Ask-Tier
-                & $installPs1 -Game $gameDir -Graphics ssgi -Tier $tier -Silent
+                & $installPs1 -Game $gameDir -Graphics ultra -Tier $tier -Silent
                 Write-Host ''
                 pause
             }

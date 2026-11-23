@@ -20,18 +20,19 @@ GraphPro Universal — Arma 3 全硬件通用性能与画质一键优化/重置�
       - 物理 HDR Bloom（Karis 防闪烁，修复原版白墙发雾与车灯/手电死白）
       - IGN Vogel 柔和蓝噪声阴影 + 深度连续性保护光照前接触阴影（草叶无黑斑）+ Grounded SSAO
 
-  [3] 旗舰画质 (-Graphics ssgi)：
-      在 [2] 基础上启用路线 B（零拷贝线性 HDR 16-Ray SSGI 间接光反弹 + 多米级 GTAO）。
-      7900X + 7900 XT 1440p Ultra YAAB 实测 74.29 FPS（比原版 DX11 仍高 +22.9%）。
+  [3] 终极旗舰画质 (-Graphics ultra)：
+      三 Pass 渲染管线：半分辨率 32-Ray 地平线遮挡追踪 RTGI（堵死薄墙漏光）+ 5×5 深度边缘感知
+      À-Trous 空间光线重建降噪器 + 联合双边上采样 + 深度驱动物理瑞利/米氏大气散射（远山空气透视）
+      + 3D GGX PBR + HDR Bloom + 柔和接触阴影 + 日/夜 AgX + CAS。
 
   [4] 轻量画质 (-Graphics agx_lite)：
-      仅保留日/夜 AgX + 物理 HDR Bloom + Natural SSAO（不含接触阴影与 SSGI，适合核显或 A/B 对比）。
+      仅保留日/夜 AgX + 物理 HDR Bloom + Natural SSAO（不含接触阴影与 RTGI，适合核显或 A/B 对比）。
 
   [5] 一键完全重置 / 卸载还原 (uninstall.ps1)：
       自动清理全部注入 DLL/着色器/配置，并 100% 还原安装前备份的 Arma3.cfg 与全部 .Arma3Profile。
 
 命令行用法（高级/静默脚本）：
-  安装：powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Graphics off|agx|ssgi|agx_lite -Tier none|auto|high|high_fps|mid|igpu
+  安装：powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Graphics off|agx|ultra|ssgi|agx_lite -Tier none|auto|high|high_fps|mid|igpu
   重置：powershell -NoProfile -ExecutionPolicy Bypass -File uninstall.ps1
 
 安全提示：

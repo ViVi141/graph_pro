@@ -18,4 +18,7 @@ if "%FXC%"=="" (
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /D CASCADE_BLEND=0 /Fo sssm_high.dxbc     sssm_soft_contact.hlsl || exit /b 1
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo ps_sssm_super_pbr.dxbc ps_sssm_super_pbr.hlsl || exit /b 1
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo tonemap_ssgi.dxbc      tonemap_ssgi.hlsl      || exit /b 1
-echo BUILT universal d3d11.dll + 7 DXBC payloads OK
+"%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo rtgi_trace.dxbc        rtgi_trace.hlsl        || exit /b 1
+"%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo rtgi_denoise.dxbc      rtgi_denoise.hlsl      || exit /b 1
+"%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo tonemap_ultimate.dxbc  tonemap_ultimate.hlsl  || exit /b 1
+echo BUILT universal d3d11.dll + 10 DXBC payloads OK
