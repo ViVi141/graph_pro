@@ -108,16 +108,16 @@ float4 main(PSIn i) : SV_Target
             float distFade = nearFade * farFade;
 
             // Adaptive ray length & thickness proportional to view distance
-            float rayLen    = clamp(depth * 0.035f, 0.18f, 0.75f);
-            float stepSize  = rayLen * 0.125f; // 8 steps
-            float minBias   = 0.015f + depth * 0.0025f;
-            float maxThick  = 0.12f  + depth * 0.018f;
+            float rayLen    = clamp(depth * 0.060f, 0.35f, 1.40f);
+            float stepSize  = rayLen / 12.0f; // 12 steps for crisp grass/curb/building contact grounding
+            float minBias   = 0.008f + depth * 0.0018f;
+            float maxThick  = 0.14f  + depth * 0.022f;
 
             float contactOcc = 0.0f;
-            float t = (0.35f + 0.65f * noise) * stepSize;
+            float t = (0.25f + 0.75f * noise) * stepSize;
 
             [unroll]
-            for (int s = 0; s < 8; s++)
+            for (int s = 0; s < 12; s++)
             {
                 float3 sp = viewPos.xyz + sunDirView * t;
                 if (sp.z > 0.2f)
@@ -134,7 +134,7 @@ float4 main(PSIn i) : SV_Target
                         {
                             // Smooth falloff near edge of thickness window and ray end
                             float thickW = 1.0f - smoothstep(maxThick * 0.5f, maxThick, dz);
-                            float rayW   = 1.0f - ((float)s / 8.0f) * 0.35f;
+                            float rayW   = 1.0f - ((float)s / 12.0f) * 0.30f;
                             contactOcc   = max(contactOcc, thickW * rayW);
                         }
                     }
@@ -142,8 +142,8 @@ float4 main(PSIn i) : SV_Target
                 t += stepSize;
             }
 
-            // Cap at 0.78 so micro-contact shadows look natural and crisp, never harsh black ink
-            shadow *= (1.0f - contactOcc * 0.78f * distFade);
+            // Cap at 0.85 so micro-contact shadows look grounded and dimensional
+            shadow *= (1.0f - contactOcc * 0.85f * distFade);
         }
     }
 
