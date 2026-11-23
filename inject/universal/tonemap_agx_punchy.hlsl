@@ -123,39 +123,35 @@ float4 main(PSIn i) : SV_Target
 
     float3 hdr = max(scene * c[37].x + glow * w, 0.0f) * 1.90f;
 
-    // 4. Pre-tonemap Shadow Depth & Physical Daylight Split-Toning
-    // Deepens washed-out 2013 ambient grey into rich cool sky-lit shadows while keeping sunlit highlights warm & luminous
+    // 4. Subtle Daylight Balance (calibrated for wide-gamut DCI-P3 gaming monitors)
     float hdrLuma = Luma(hdr);
-    float shadowMask = 1.0f - smoothstep(0.04f, 0.55f, hdrLuma);
-    float sunMask    = smoothstep(0.35f, 1.60f, hdrLuma);
+    float shadowMask = 1.0f - smoothstep(0.04f, 0.45f, hdrLuma);
+    float sunMask    = smoothstep(0.40f, 1.60f, hdrLuma);
 
-    // Cool sky fill in shadows (9500K sky dome), warm golden daylight on sunlit surfaces (5600K sun)
-    float3 coolTint = float3(0.89f, 0.96f, 1.11f);
-    float3 warmTint = float3(1.05f, 1.01f, 0.94f);
-    float3 splitTint = lerp(float3(1.0f, 1.0f, 1.0f), coolTint, shadowMask * 0.65f);
-    splitTint        = lerp(splitTint, warmTint, sunMask * 0.55f);
+    float3 coolTint = float3(0.96f, 0.99f, 1.03f);
+    float3 warmTint = float3(1.02f, 1.00f, 0.98f);
+    float3 splitTint = lerp(float3(1.0f, 1.0f, 1.0f), coolTint, shadowMask * 0.25f);
+    splitTint        = lerp(splitTint, warmTint, sunMask * 0.25f);
     hdr *= splitTint;
 
-    // Subtle HDR toe deepening (adds real 3D weight to shadowed foliage/crevices without crushing to 0)
-    float toeCurve = lerp(0.90f, 1.08f, smoothstep(0.02f, 0.65f, hdrLuma));
+    float toeCurve = lerp(0.94f, 1.05f, smoothstep(0.02f, 0.65f, hdrLuma));
     hdr *= toeCurve;
 
-    // 5. AgX Filmic Tonemap + Punchy Contrast S-Curve
+    // 5. AgX Filmic Tonemap + Gentle Natural Contrast
     float3 srgb = agxTonemap(hdr);
-    srgb = pow(max(srgb, 1e-6f), 1.29f);
+    srgb = pow(max(srgb, 1e-6f), 1.18f);
 
-    // Gentle S-curve in sRGB to pop midtone separation without clipping highlights or crushing blacks
     float3 sCurve = srgb * srgb * (3.0f - 2.0f * srgb);
-    srgb = lerp(srgb, sCurve, 0.14f);
+    srgb = lerp(srgb, sCurve, 0.06f);
 
-    // 6. Photorealistic Vibrance (boosts pale 2013 foliage/sky more than already-vivid colors)
+    // 6. Wide-Gamut-Safe Vibrance (+0.08 max, natural greens & skies)
     float g = Luma(srgb);
     float mxC = max(srgb.r, max(srgb.g, srgb.b));
     float mnC = min(srgb.r, min(srgb.g, srgb.b));
     float curSat = (mxC - mnC) / max(mxC, 1e-4f);
     float hiProtect = 1.0f - smoothstep(0.75f, 0.99f, g);
     float loProtect = smoothstep(0.02f, 0.10f, g);
-    float vibBoost  = (0.34f * (1.0f - curSat * 0.65f)) * hiProtect * loProtect;
+    float vibBoost  = (0.08f * (1.0f - curSat * 0.70f)) * hiProtect * loProtect;
     srgb = saturate(lerp(float3(g, g, g), srgb, 1.0f + vibBoost));
 
     // 7. Linearize & apply Arma 3 display gamma + ±0.5/255 IGN dithering

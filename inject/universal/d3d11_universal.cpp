@@ -71,7 +71,7 @@ static ID3D11Device* g_dev = nullptr;
 static ID3D11DeviceContext* g_ctx = nullptr;
 
 // SSGI / Multi-Pass RTGI zero-copy depth forwarding & half-res denoiser pipeline
-static ID3D11PixelShader*        g_sssmPS[4] = {};
+static ID3D11PixelShader*        g_sssmPS[32] = {};
 static int                       g_sssmCount = 0;
 static ID3D11PixelShader*        g_tonemapPS = nullptr;
 static ID3D11ShaderResourceView* g_lastSlot0SRV = nullptr;
@@ -303,10 +303,10 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
             g_tonemapPS = *ppShader;
             Log("[GP] SSGI tracked Tonemap PS=%p\n", g_tonemapPS);
           } else if (crc == 0xC8390391u || crc == 0x31F14A8Eu || crc == 0x3D897E19u || crc == 0xF811038Eu) {
-            if (g_sssmCount < 4) {
-              g_sssmPS[g_sssmCount++] = *ppShader;
-              Log("[GP] SSGI tracked SSSM PS[%d]=%p (crc=%08X)\n", g_sssmCount - 1, *ppShader, crc);
-            }
+            int slot = g_sssmCount % 32;
+            g_sssmPS[slot] = *ppShader;
+            if (g_sssmCount < 32) g_sssmCount++;
+            Log("[GP] SSGI tracked SSSM PS[%d]=%p (crc=%08X)\n", slot, *ppShader, crc);
           }
         }
         return hr;
@@ -570,6 +570,12 @@ static void ExecuteMultiPassRtgi(ID3D11DeviceContext* ctx, DrawFn&& doDraw) {
     // Unbind t2/t3 cleanly to prevent any downstream resource hazards
     ID3D11ShaderResourceView* clearExtra[2] = { nullptr, nullptr };
     g_origPSSetSRVs(ctx, 2, 2, clearExtra);
+
+    // Release per-frame depth SRV immediately after Tonemap so in-game graphics/resolution
+    // changes can NEVER leave a stale/frozen depth texture burned onto the screen!
+    ID3D11ShaderResourceView* stale = (ID3D11ShaderResourceView*)InterlockedExchangePointer((PVOID*)&g_ssgiDepthSRV, nullptr);
+    if (stale) stale->Release();
+    g_lastSlot0SRV = nullptr;
 
     if (InterlockedIncrement(&g_rtgiRunLogs) <= 3) {
       Log("[GP] Multi-Pass RTGI executed (%ux%u -> %ux%u)\n", halfW, halfH, (UINT)origVp.Width, (UINT)origVp.Height);

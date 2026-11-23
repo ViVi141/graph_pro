@@ -127,81 +127,49 @@ float4 main(PSIn i) : SV_Target
             wSum  += w;
         }
         float4 rtgi = giSum / max(wSum, 1e-4f);
-        float3 giBounce = rtgi.rgb;
+        // Slightly desaturate bounced GI so bright sky-blue never tints green foliage
+        float3 giBounce = lerp(Luma(rtgi.rgb).xxx, rtgi.rgb, 0.65f);
         float  giAO     = saturate(rtgi.a);
 
-        // Physically combine denoised GTAO + colored indirect bounce light in linear HDR!
+        // Physically combine denoised GTAO + indirect bounce light in linear HDR
+        // (No artificial distance blue-haze overlay -> zero sky-blue mask on alpha-tested foliage!)
         float  sceneL = Luma(sceneClean);
-        float3 recvAlbedo = lerp(float3(0.42f, 0.42f, 0.42f), sceneClean / max(sceneL, 0.08f), 0.50f);
-        // Shadowed surfaces receive richer visible bounce fill; directly sunlit surfaces stay crisp
-        float  shadowBoost = lerp(1.55f, 0.50f, smoothstep(0.08f, 0.85f, sceneL));
-        sceneClean = sceneClean * giAO + giBounce * recvAlbedo * (1.85f * shadowBoost);
-
-        // ---------------------------------------------------------------------
-        // 3. Depth-Driven Physical Atmospheric Perspective (Rayleigh + Mie Aerial Depth)
-        // Replaces Arma 3's flat 2013 grey distance fog with crisp Mediterranean aerial blue
-        // and subtle warm sun-direction Mie forward scattering on distant hills/towns (>140m)!
-        // ---------------------------------------------------------------------
-        float aeroDist = max(dC - 130.0f, 0.0f);
-        if (aeroDist > 0.0f)
-        {
-            float rayleighAmt = (1.0f - exp(-aeroDist / 1750.0f)) * 0.42f;
-            // Sample upper sky dome color so atmospheric perspective matches current weather/time of day!
-            float3 skyRef = max(t_scene.SampleLevel(s_scene, float2(i.uv.x, 0.08f), 0).rgb, 0.0f);
-            float  skyL   = Luma(skyRef);
-            // Rich aerial blue-tinted scatter (desaturated gracefully in overcast/sunset via skyRef)
-            float3 scatterCol = lerp(skyRef, skyRef * float3(0.84f, 0.96f, 1.18f), 0.65f);
-            scatterCol = max(scatterCol, float3(0.04f, 0.06f, 0.09f) * max(skyL, 0.15f));
-
-            // Optional Mie forward-scattering golden glow if sun direction is present in cb13[47]
-            float3 rawSun = -c[47].xyz;
-            float  sunLen = length(rawSun);
-            if (sunLen > 1e-4f)
-            {
-                float2 fovScale = (c[44].x > 0.05f && c[44].y > 0.05f && c[44].x < 4.0f)
-                    ? c[44].xy : float2(0.65f * aspect, 0.65f);
-                float2 ndc = i.uv * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f);
-                float3 viewDir = normalize(float3(ndc * fovScale, 1.0f));
-                float  cosSun  = saturate(dot(viewDir, rawSun / sunLen));
-                float  mie     = pow(cosSun, 6.0f) * 0.35f;
-                scatterCol += float3(1.15f, 0.96f, 0.72f) * (mie * max(skyL, 0.2f));
-            }
-
-            sceneClean = lerp(sceneClean, scatterCol, rayleighAmt);
-        }
+        float3 recvAlbedo = lerp(float3(0.40f, 0.40f, 0.40f), sceneClean / max(sceneL, 0.08f), 0.45f);
+        float  shadowBoost = lerp(1.35f, 0.40f, smoothstep(0.08f, 0.85f, sceneL));
+        sceneClean = sceneClean * giAO + giBounce * recvAlbedo * (1.35f * shadowBoost);
     }
 
     // 4. Combine with Physical HDR Bloom
     float3 glowRaw = t_glow.Sample(s_glow, i.uv).rgb;
-    float3 glow    = pow(max(glowRaw, 1e-6f), c[37].w) * 0.28f;
+    float3 glow    = pow(max(glowRaw, 1e-6f), c[37].w) * 0.25f;
 
     float3 scene = sceneClean * c[37].z;
     float  luma  = Luma(scene);
     float  w     = saturate(1.0f - 1.8f * luma) * c[37].y;
 
-    float3 hdr = max(scene * c[37].x + glow * w, 0.0f) * 1.85f;
+    float3 hdr = max(scene * c[37].x + glow * w, 0.0f) * 1.75f;
 
-    // 5. Daylight Split-Toning + AgX Filmic Tonemap
+    // 5. Ultra-Subtle Daylight Balance + Natural AgX Filmic (calibrated for wide-gamut DCI-P3 monitors)
     float hdrLuma    = Luma(hdr);
-    float shadowMask = 1.0f - smoothstep(0.04f, 0.50f, hdrLuma);
-    float sunMask    = smoothstep(0.35f, 1.55f, hdrLuma);
-    float3 splitTint = lerp(float3(1.0f, 1.0f, 1.0f), float3(0.90f, 0.96f, 1.09f), shadowMask * 0.55f);
-    splitTint        = lerp(splitTint, float3(1.05f, 1.01f, 0.94f), sunMask * 0.50f);
+    float shadowMask = 1.0f - smoothstep(0.04f, 0.45f, hdrLuma);
+    float sunMask    = smoothstep(0.40f, 1.60f, hdrLuma);
+    float3 splitTint = lerp(float3(1.0f, 1.0f, 1.0f), float3(0.96f, 0.99f, 1.03f), shadowMask * 0.25f);
+    splitTint        = lerp(splitTint, float3(1.02f, 1.00f, 0.98f), sunMask * 0.25f);
     hdr *= splitTint;
 
     float3 srgb = agxTonemap(hdr);
-    srgb = pow(max(srgb, 1e-6f), 1.27f);
+    srgb = pow(max(srgb, 1e-6f), 1.18f);
     float3 sCurve = srgb * srgb * (3.0f - 2.0f * srgb);
-    srgb = lerp(srgb, sCurve, 0.13f);
+    srgb = lerp(srgb, sCurve, 0.06f);
 
-    // 6. Photorealistic Vibrance + ±0.5/255 IGN Dithering
+    // 6. Natural Wide-Gamut-Safe Vibrance (+0.08 max, zero neon/oversaturated greens) + IGN Dithering
     float g   = Luma(srgb);
     float mxC = max(srgb.r, max(srgb.g, srgb.b));
     float mnC = min(srgb.r, min(srgb.g, srgb.b));
     float curSat = (mxC - mnC) / max(mxC, 1e-4f);
     float hiProtect = 1.0f - smoothstep(0.75f, 0.99f, g);
     float loProtect = smoothstep(0.02f, 0.10f, g);
-    float vibBoost  = (0.30f * (1.0f - curSat * 0.65f)) * hiProtect * loProtect;
+    float vibBoost  = (0.08f * (1.0f - curSat * 0.70f)) * hiProtect * loProtect;
     srgb = saturate(lerp(float3(g, g, g), srgb, 1.0f + vibBoost));
 
     float3 lin    = pow(max(srgb, 1e-6f), 2.2f);
