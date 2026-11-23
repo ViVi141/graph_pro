@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$ProfileName = 'ViVi141',
     [ValidateSet('ultragpu_smartcpu', 'high_fps_noclouds')]
     [string]$Preset = 'ultragpu_smartcpu',

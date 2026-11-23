@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Game = $env:ARMA3_DIR
 )
 $ErrorActionPreference = 'Stop'
