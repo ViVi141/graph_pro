@@ -106,6 +106,8 @@ def main():
     # Point the replacement table at a shader whose (size, crc) we can reproduce.
     with open(os.path.join(moddir, "GP_replace.txt"), "w") as f:
         f.write("%d %08X GP_tonemap_agx.dxbc\n" % (len(blob), crc))
+    # Opt-in blob dump: every CreatePixelShader must land in GP_psdump\.
+    open(os.path.join(moddir, "GP_dump_bytes.txt"), "w").close()
 
     os.add_dll_directory(moddir)
     dll = ctypes.CDLL(os.path.join(moddir, "d3d11.dll"))
@@ -215,6 +217,9 @@ def main():
         "224 B dynamic buffer mapped twice": map_ok == 2,
         "config dropped in after launch is detected": "constant injection enabled by a config file that appeared after launch" in text,
         "late config actually injects constants": "material amb/ae injected" in text,
+        "GP_dump_bytes.txt dumped the created PS blob": os.path.isdir(
+            os.path.join(moddir, "GP_psdump")) and any(
+                f.endswith(".dxbc") for f in os.listdir(os.path.join(moddir, "GP_psdump"))),
     }
     print("--- checks ---")
     bad = 0
