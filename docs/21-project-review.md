@@ -332,3 +332,21 @@ powershell -File tools\build_present.ps1
 `GP_upscale.txt` 里有 `5596 B682EAC0`（1440×810 → 1920×1080，hits=6579），原始文件归档在
 [extract/upscale_probe_20261028/1440x810](../extract/upscale_probe_20261028/1440x810/README.md)。
 所以本节的"超分仍缺一次实测"应改为"**指纹已对上，画质 A/B 未做**"；1600×900 的 6204 只适用于那个分辨率。
+
+---
+
+**2026-11-23 补记（Universal 线加入后）**：本评审的范围只覆盖经典 `inject/proxy`
+线与 2026-10-28 的工具面，**未包含** `inject/universal/`。该线的实测记录见
+[docs/20-route2-7900x-7900xt-perf.md](20-route2-7900x-7900xt-perf.md) 与
+[RESULTS.md](RESULTS.md) 2026-11-23 条目。同日修复了评审 §11.5 遗留的“版本自检”缺口
+（仅 Universal 线：50 个 PS 无命中写警告；经典线仍无），并新增
+`tools/universal_smoke_test.py`。评审中关于代码质量与脚本行为的结论，
+对 `inject/universal/` **需要单独复核**后再引用。
+
+---
+
+**2026-11-23 归档记录**：同日，经典画面旁路线（`inject/proxy`、`inject/presets`、
+`inject/present`、根目录 `deploy/remove/toggle/set-spec`、经典载荷与探针工具）已整体
+移入 [`archive/legacy-proxy/`](../archive/legacy-proxy/ARCHIVED.md)。本文正文中的
+`inject/proxy/...`、`tools/proxy_smoke_test.py` 等是归档前的历史路径；离线复现命令
+见归档目录的 `ARCHIVED.md`。Universal 是唯一在维护的注入线。

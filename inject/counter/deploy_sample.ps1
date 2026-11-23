@@ -19,7 +19,7 @@ foreach ($n in $need) {
 }
 $proxy = Join-Path $Game 'd3d11.dll'
 if (Test-Path $proxy) {
-  Write-Host "WARN: d3d11.dll still in game dir; prefer inject\remove.ps1 first" -ForegroundColor Yellow
+  Write-Host "WARN: d3d11.dll still in game dir; prefer archive\legacy-proxy\inject\remove.ps1 first" -ForegroundColor Yellow
 }
 Write-Host "Deployed sampler to: $Game" -ForegroundColor Green
 Write-Host "Next: start Arma3_x64 / YAAB, then attach_sample.ps1" -ForegroundColor Cyan

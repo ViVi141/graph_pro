@@ -79,7 +79,20 @@ Write-Host "  Arma 3   : $Game"
 Write-Host "  CPU      : $($cpu.Name.Trim()) ($logicalCores threads -> dxvk.numCompilerThreads=$compThreads)"
 Write-Host "  GPU      : $gpuName (tier=$Tier, backend=$Backend, graphics=$Graphics)"
 
-# 3. Backup any existing user d3d11/dxgi DLLs
+# 3. Refuse to overwrite the classic proxy. It is not a user DLL, and backing
+# it up as "original" would make uninstall.ps1 restore another injector.
+$existingDll = Join-Path $Game 'd3d11.dll'
+if (Test-Path -LiteralPath $existingDll) {
+    $marker = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($existingDll))
+    if ($marker.Contains('GP_shader.log') -and -not $marker.Contains('GP_universal.log')) {
+        $msg = '检测到经典画面旁路代理（已归档）仍在游戏目录。请先运行 archive\legacy-proxy\inject\remove.ps1，再运行本安装器。'
+        if ($Silent) { throw $msg }
+        Write-Host $msg -ForegroundColor Yellow
+        exit 1
+    }
+}
+
+# 4. Backup any existing user d3d11/dxgi DLLs
 $bakDir = Join-Path $Game '_gp_universal_backup'
 New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
 foreach ($f in @('d3d11.dll','dxgi.dll','dxvk.conf')) {
@@ -90,13 +103,44 @@ foreach ($f in @('d3d11.dll','dxgi.dll','dxvk.conf')) {
     }
 }
 
-# Clean any leftover GP_* graphics configs before deploying
-foreach ($f in @('GP_replace.txt','GP_tonemap.dxbc','GP_tonemap_night.dxbc','GP_bloom_init.dxbc','GP_sssm_veryhigh.dxbc','GP_sssm_high.dxbc','GP_ssao.dxbc','GP_super_pbr.dxbc','GP_ssgi.txt','GP_rtgi_trace.dxbc','GP_rtgi_denoise.dxbc','GP_amb.txt','GP_amb_stylized.txt','GP_expo.txt','GP_spec.txt')) {
+# Clean any leftover GP_* configs from a previous campaign before deploying.
+# The list also covers the classic proxy line (inject\deploy.ps1) so switching
+# between the two lines starts from the same state.
+$staleGp = @(
+    # universal line: payloads, switches, logs
+    'GP_replace.txt', 'GP_tonemap.dxbc', 'GP_tonemap_night.dxbc', 'GP_bloom_init.dxbc',
+    'GP_sssm_veryhigh.dxbc', 'GP_sssm_high.dxbc', 'GP_ssao.dxbc', 'GP_super_pbr.dxbc',
+    'GP_ssgi.txt', 'GP_rtgi_trace.dxbc', 'GP_rtgi_denoise.dxbc',
+    'GP_amb.txt', 'GP_amb_stylized.txt', 'GP_expo.txt', 'GP_spec.txt',
+    'GP_backend.txt', 'GP_enable_dump.txt', 'GP_dump.txt', 'GP_dump_ps.txt',
+    'GP_shot.raw', 'GP_universal.log',
+    # classic line: payloads, presets, probes
+    'GP_tonemap_agx.dxbc', 'GP_tonemap_agx_neutral.dxbc', 'GP_fsr1.dxbc',
+    'GP_light.txt', 'GP_light_auto.txt', 'GP_light_bind.txt',
+    'GP_present.txt', 'GP_present_on.txt', 'GP_present_off.txt', 'GP_present_contact.txt',
+    'GP_expo_adapt.txt', 'GP_expo_tight.txt', 'GP_spec_boost.txt',
+    'GP_replace_aces.txt', 'GP_replace_agx_neutral.txt', 'GP_replace_fsr1.txt',
+    'GP_adapt.txt', 'GP_cb_dump.txt',
+    'GP_probe.txt', 'GP_probe_mrt.txt', 'GP_probe_scale.txt',
+    'GP_upscale.txt', 'GP_upscale_dump.txt', 'GP_upscale_dump_input.txt',
+    'GP_passseq.txt', 'GP_shaders.txt', 'GP_shader.log', 'GP_drawlog.txt',
+    'GP_candhooks.txt', 'GP_canddump.txt'
+)
+foreach ($f in $staleGp) {
     $p = Join-Path $Game $f
-    if (Test-Path $p) { Remove-Item $p -Force }
+    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
 }
+Get-ChildItem -LiteralPath $Game -Filter 'GP_up_in_*.raw' -File -ErrorAction SilentlyContinue | Remove-Item -Force
+# Stale chained-DXVK copy: the "off" deployment stages DXVK as d3d11.dll and
+# must not leave a second DXVK backend next to it.
+$staleBackend = Join-Path $Game 'gp_dxvk_d3d11.dll'
+if (Test-Path -LiteralPath $staleBackend) { Remove-Item -LiteralPath $staleBackend -Force }
+# toggle.ps1 parks the classic proxy as d3d11.dll.off; a later -On would
+# silently re-enable it behind the universal line.
+$parkedProxy = Join-Path $Game 'd3d11.dll.off'
+if (Test-Path -LiteralPath $parkedProxy) { Remove-Item -LiteralPath $parkedProxy -Force }
 
-# 4. Deploy Backend (Pure DXVK when Graphics=off for ZERO proxy overhead; Chained Universal Proxy when Graphics!=off)
+# 5. Deploy Backend (Pure DXVK when Graphics=off for ZERO proxy overhead; Chained Universal Proxy when Graphics!=off)
 if ($Graphics -eq 'off' -and $Backend -ne 'native') {
     Copy-Item (Join-Path $src 'gp_dxvk_d3d11.dll') (Join-Path $Game 'd3d11.dll') -Force
     Copy-Item (Join-Path $src 'dxgi.dll') (Join-Path $Game 'dxgi.dll') -Force

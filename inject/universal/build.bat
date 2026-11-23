@@ -1,7 +1,18 @@
 @echo off
+rem Build the universal proxy. Location-independent: works from any cwd.
+rem VS is looked up in the standard install roots; for custom installs run this
+rem from a "Developer Command Prompt for VS".
 setlocal
 cd /d "%~dp0"
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
+
+call "%~dp0..\vcvars64_locate.bat"
+if errorlevel 1 (
+  echo [build] vcvars64.bat not found - install VS C++ tools or run this from a Developer Command Prompt.
+  exit /b 1
+)
+call "%VSW%" >nul
+if errorlevel 1 exit /b 1
+
 cl /nologo /LD /MT /O2 /EHsc /utf-8 d3d11_universal.cpp /link /DEF:d3d11_universal.def /OUT:d3d11.dll
 if errorlevel 1 exit /b 1
 

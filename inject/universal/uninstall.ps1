@@ -24,7 +24,19 @@ $removeList = @(
     'GP_backend.txt','GP_replace.txt','GP_tonemap.dxbc','GP_tonemap_night.dxbc',
     'GP_bloom_init.dxbc','GP_sssm_veryhigh.dxbc','GP_sssm_high.dxbc','GP_ssao.dxbc','GP_super_pbr.dxbc',
     'GP_ssgi.txt','GP_rtgi_trace.dxbc','GP_rtgi_denoise.dxbc',
-    'GP_amb.txt','GP_amb_stylized.txt','GP_expo.txt','GP_spec.txt','GP_universal.log'
+    'GP_amb.txt','GP_amb_stylized.txt','GP_expo.txt','GP_spec.txt','GP_universal.log',
+    'GP_enable_dump.txt','GP_dump.txt','GP_dump_ps.txt','GP_shot.raw',
+    # classic proxy line leftovers (inject\deploy.ps1)
+    'GP_tonemap_agx.dxbc','GP_tonemap_agx_neutral.dxbc','GP_fsr1.dxbc',
+    'GP_light.txt','GP_light_auto.txt','GP_light_bind.txt',
+    'GP_present.txt','GP_present_on.txt','GP_present_off.txt','GP_present_contact.txt',
+    'GP_expo_adapt.txt','GP_expo_tight.txt','GP_spec_boost.txt',
+    'GP_replace_aces.txt','GP_replace_agx_neutral.txt','GP_replace_fsr1.txt',
+    'GP_adapt.txt','GP_cb_dump.txt',
+    'GP_probe.txt','GP_probe_mrt.txt','GP_probe_scale.txt',
+    'GP_upscale.txt','GP_upscale_dump.txt','GP_upscale_dump_input.txt',
+    'GP_passseq.txt','GP_shaders.txt','GP_shader.log','GP_drawlog.txt',
+    'GP_candhooks.txt','GP_canddump.txt'
 )
 foreach ($f in $removeList) {
     $p = Join-Path $Game $f

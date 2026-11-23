@@ -1,6 +1,11 @@
 # 15 · 渲染管线与注入点总图（探索任务 2026-10-24）
 
-现场：Computer Use 确认 **仅 `arma3launcher` 在跑**，`arma3_x64` 未进局；任务栏可见 BattlEye / ARMA III。下列为仓库 + 代理日志 + Gate 文档的**已证合成**，非本次进局新抓帧。
+> **归档注记（2026-11-23）**：本文描述的是经典 `inject/proxy` 线的钩子面
+> （Present / PS 指纹 / CB），该线已归档到
+> [`archive/legacy-proxy/`](../archive/legacy-proxy/ARCHIVED.md)。Universal 线
+> 不钩 Present，本文的 Present 相关结论不适用于它。
+
+现场：Computer Use 确认 **仅 `arma3launcher` 在跑**，`arma3_x64` 未进局；任务栏 可见 BattlEye / ARMA III。下列为仓库 + 代理日志 + Gate 文档的**已证合成**，非本 次进局新抓帧。
 
 引擎：Real Virtuality 4 · **D3D11 only** · 前向多 pass · 无私有渲染插件 API。
 

@@ -37,3 +37,13 @@ GraphPro Universal — Arma 3 全硬件通用性能与画质一键优化/重置�
 
 安全提示：
   仅建议在单人模式或无 BattlEye 的私服使用；联机官方服前请先执行 [5] 一键重置还原。
+  经典画面旁路线已归档（archive\legacy-proxy\），Universal 是唯一在维护的注入线。
+  如果你的游戏目录仍部署着经典代理，先跑 archive\legacy-proxy\inject\remove.ps1，
+  再跑 install.ps1；不需要再切回经典线。
+  安装器会先清理经典线残留的 GP_* 配置与陈旧后端文件，并把游戏目录原有
+  d3d11.dll / dxgi.dll / dxvk.conf 备份到 _gp_universal_backup。
+
+只读自检（不启动游戏）：
+  powershell -NoProfile -ExecutionPolicy Bypass -File ..\..\tools\verify_universal.ps1
+  powershell -NoProfile -ExecutionPolicy Bypass -File ..\..\tools\verify_universal.ps1 -Expect ultra
+  检查部署身份、SHA256、GP_universal.log 命中与最新 RPT；退出码 0 = 全部通过。

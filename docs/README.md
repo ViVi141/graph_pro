@@ -45,9 +45,16 @@ Status labels:
 | [08-capabilities.md](08-capabilities.md) | Modifyable parameters and hard limits | current |
 | [09-benchmark.md](09-benchmark.md) | Comparison against modern rendering / photos | historical targets |
 | [10-dll-options.md](10-dll-options.md) | ReShade / ENB / SpecialK / DLSS / FSR landscape | current reference |
-| [12-pipeline-feasibility.md](12-pipeline-feasibility.md) | Gate 0–2: clean depth, contact shadows, MRT | historical; conclusions still hold |
-| [15-render-pipeline-injection-map.md](15-render-pipeline-injection-map.md) | Hook map + pass order | current map |
+| [12-pipeline-feasibility.md](12-pipeline-feasibility.md) | Gate 0–2: clean depth, contact shadows, MRT | historical; classic line archived |
+| [15-render-pipeline-injection-map.md](15-render-pipeline-injection-map.md) | Hook map + pass order | historical map; classic line archived |
+| [20-route2-7900x-7900xt-perf.md](20-route2-7900x-7900xt-perf.md) | Route 2: DXVK chain on 7900X/7900XT, 14-round controlled A/B (perf only) | data |
 | [21-project-review.md](21-project-review.md) | Engineering review and fix log | review |
+
+> The classic proxy line (docs 12 / 15 and the `inject/proxy` + `inject/presets`
+> paths they describe) was archived on 2026-11-23 under
+> [`archive/legacy-proxy/`](../archive/legacy-proxy/ARCHIVED.md). The documents keep
+> their original paths as historical records; Universal (`inject/universal/`) is
+> the maintained injection line.
 
 ## CPU
 
@@ -65,7 +72,7 @@ Status labels:
 
 | Doc | Topic | Status |
 |---|---|---|
-| [RESULTS.md](RESULTS.md) | Chronological experiment log (2026-10-22 → 28) | data |
+| [RESULTS.md](RESULTS.md) | Chronological experiment log (2026-10-22 → 11-23) | data |
 | [04-bugfix-weather-syntax.md](04-bugfix-weather-syntax.md) | SQF `setOvercast` syntax bug | historical |
 | [11-re-findings.md](11-re-findings.md) | Static RE findings on `Arma3_x64.exe` | historical |
 | [blog-arma-optimization.md](blog-arma-optimization.md) | Public-facing version of the CPU story | narrative |
@@ -80,12 +87,15 @@ Status labels:
 - Build outputs: `*.dll`, `*.exe`, `*.obj`, `*.lib`, `*.exp`.
 
 Curated data that *is* in git: `extract/cpu_samples/` JSON + notes,
-`extract/rdc_notes/`, `extract/shader-inventory.csv`.
+`extract/bench_7900x/` (14 A/B runs + profiler extracts), `extract/ab_graphics/`
+(startup logs only — no image metrics), `extract/rdc_notes/`,
+`extract/shader-inventory.csv`.
 
 ## Reading by goal
 
 - **"Did this actually improve the image?"** → `21` §3, `RESULTS.md`, `08`.
 - **"Can I hook pass X?"** → `15`, `12`, `10`.
 - **"Why is Arma CPU-bound?"** → `19`, `13`, `20`, `16`, `17`.
+- **"Does DXVK / Universal actually help?"** → `20-route2` (perf numbers), `RESULTS.md` 2026-11-23.
 - **"What should I not waste time on?"** → `21` §9, `RESULTS.md` "failed attempts".
 - **"How do I reproduce a measurement?"** → `05`, `RESULTS.md`, `tools/README.md`.

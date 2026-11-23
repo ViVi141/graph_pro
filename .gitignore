@@ -139,3 +139,6 @@ tools/dxvk/dxvk-*/
 inject/malloc/src/
 extract/ab_graphics/prof/
 mission/GP_YAAB_Auto.Altis/
+
+# --- IDE / assistant workspace metadata ---
+.qoder/

@@ -17,32 +17,33 @@ $env:ARMA3_DIR = "C:\Program Files (x86)\Steam\steamapps\common\Arma 3"
 
 | File | Purpose |
 |---|---|
-| `build_tonemap.ps1` | Compile `tonemap_agx/aces` + `ssao_final` + `fsr1` → `inject/presets/GP_*.dxbc`; auto-detects fxc. |
-| `build_present.ps1` | Compile the Present-pass entries → `inject/present/*.dxbc` + embedded header. Uses `/O3` (separate contract). |
-| `proxy_smoke_test.py` | Real D3D11 device, hidden window: config load → shader replace → Present ×2 → ResizeBuffers. No game. |
-| `probe_smoke_test.py` | Upscale probe: prio-2 record, half-float decode, HDR verdict, raw dump. No game. |
-| `analyze_capture.py` | Explain `GP_passseq.txt` / `GP_upscale.txt` / `GP_shaders.txt`; flags low-confidence captures. |
+| `universal_smoke_test.py` | Headless D3D11 device for the Universal proxy: DllMain does no file IO, config loads on first device creation. No game. |
+| `verify_universal.ps1` | Read-only deployment check: proxy identity, hashes, backend/graphics-pack state, log hits. |
 | `estimate_mission_cpu.py` | SEU budget model (`config/cpu_catalog.json` + `docs/17` coefficients). |
 | `pe_imports.py` | PE import table (confirm the game's D3D11/DXGI surface). |
 | `rvmat_patch.py` / `pbo_rvmat_scan.py` | rvmat inspection/patching helpers for the material line. |
 
-> `build_tonemap.ps1` is **ps_4_0 without /O3** so it reproduces the shipped
-> `GP_ssao.dxbc` (`5A2370A56BA8`) and `GP_tonemap.dxbc` (`8BD7FDE4571B`).
-> Changing the profile silently changes SSAO output. The Present payloads use
-> `ps_5_0 /O3`; that is a separate, documented contract.
+> The classic-line tooling (`build_tonemap.ps1`, `build_present.ps1`,
+> `proxy_smoke_test.py`, `probe_smoke_test.py`, `analyze_capture.py`,
+> `capture_3way_graphics.ps1`, `gen_cand*.py`) moved to
+> [`archive/legacy-proxy/tools/`](../archive/legacy-proxy/ARCHIVED.md) on 2026-11-23.
+> Its build contract (**ps_4_0 without /O3** reproduces the shipped
+> `GP_ssao.dxbc` / `GP_tonemap.dxbc`; Present payloads use `ps_5_0 /O3`) is kept there.
 
 ## Validation flow
 
 ```powershell
-# 1. build the proxy first
-cd inject\proxy; build.bat; cd ..\..
+# 1. build the Universal proxy first
+cd inject\universal; build.bat; cd ..\..
 
 # 2. offline checks (no Arma process)
-python tools\proxy_smoke_test.py
-python tools\probe_smoke_test.py
+python tools\universal_smoke_test.py
+powershell -File tools\verify_universal.ps1
 
-# 3. after a probe capture (the user runs the game)
-python tools\analyze_capture.py "$env:ARMA3_DIR"
+# 3. archived classic-line checks (compile archive\legacy-proxy\inject\proxy first)
+python archive\legacy-proxy\tools\proxy_smoke_test.py
+python archive\legacy-proxy\tools\probe_smoke_test.py
+python archive\legacy-proxy\tools\analyze_capture.py "$env:ARMA3_DIR"
 ```
 
 ## Lab notes (selected)

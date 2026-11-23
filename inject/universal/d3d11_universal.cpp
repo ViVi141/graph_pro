@@ -70,6 +70,12 @@ static bool g_enableSsgi = false;
 static ID3D11Device* g_dev = nullptr;
 static ID3D11DeviceContext* g_ctx = nullptr;
 
+// Deferred init (config files are read on the first CreateDevice*, never in DllMain).
+static volatile LONG g_initState = 0;      // 0 = new, 1 = running, 2 = done
+static volatile LONG g_psCreated = 0;
+static volatile LONG g_replHits = 0;
+static volatile LONG g_noMatchWarned = 0;
+
 // SSGI / Multi-Pass RTGI zero-copy depth forwarding & half-res denoiser pipeline
 static ID3D11PixelShader*        g_sssmPS[32] = {};
 static int                       g_sssmCount = 0;
@@ -258,6 +264,20 @@ static void LoadInitialConfig() {
       g_expoSize, g_expoLo, g_expoHi, g_specMode, g_specBoost);
 }
 
+// Config files are read on the first D3D11CreateDevice* export entry, not from
+// DllMain: file IO under the loader lock can deadlock on a slow / locked disk.
+static void EnsureInit() {
+  if (g_initState == 2) return;
+  LONG prev = InterlockedCompareExchange(&g_initState, 1, 0);
+  if (prev == 2) return;
+  if (prev == 1) {                       // another thread is reading the config
+    while (g_initState != 2) Sleep(1);
+    return;
+  }
+  LoadInitialConfig();
+  InterlockedExchange(&g_initState, 2);
+}
+
 // ---------------------------------------------------------------- Shader Hook
 typedef HRESULT (STDMETHODCALLTYPE *PFN_CPS)(
     ID3D11Device*, const void*, SIZE_T, ID3D11ClassLinkage*, ID3D11PixelShader**);
@@ -279,6 +299,7 @@ static bool LooksLikeSSAOFinal(const void* data, size_t len) {
 static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
     ID3D11Device* self, const void* data, SIZE_T len,
     ID3D11ClassLinkage* linkage, ID3D11PixelShader** ppShader) {
+  long created = InterlockedIncrement(&g_psCreated);
   if (data && len > 0) {
     uint32_t crc = Crc32(data, len);
     if (g_dumpPs && len >= 12000) {
@@ -296,6 +317,7 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
     }
     for (const auto& r : g_repl) {
       if (r.size == len && r.crc == crc) {
+        InterlockedIncrement(&g_replHits);
         Log("[GP] REPLACED PS len=%zu crc=%08X -> %zu bytes\n", len, crc, r.data.size());
         HRESULT hr = g_origCPS(self, r.data.data(), r.data.size(), linkage, ppShader);
         if (SUCCEEDED(hr) && ppShader && *ppShader && g_enableSsgi) {
@@ -317,6 +339,16 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
       Log("[GP] REPLACED SSAOFinal len=%zu crc=%08X\n", len, crc);
       return g_origCPS(self, g_ssao.data(), g_ssao.size(), linkage, ppShader);
     }
+  }
+  // Version self-check: the game creates dozens of pixel shaders while loading.
+  // If none of them matched, the (size, crc) fingerprints belong to another
+  // Arma 3 build, so the shipped look is silently doing nothing.
+  if (!g_repl.empty() && g_replHits == 0 && g_ssaoReplaced == 0 &&
+      created >= 50 && g_noMatchWarned == 0 &&
+      InterlockedExchange(&g_noMatchWarned, 1) == 0) {
+    Log("[GP] WARN: %ld pixel shaders created, no replacement matched. "
+        "Arma 3 was probably updated; re-run the upscale/dump probe to refresh "
+        "the size/crc fingerprints.\n", created);
   }
   return g_origCPS(self, data, len, linkage, ppShader);
 }
@@ -821,6 +853,7 @@ extern "C" HRESULT WINAPI D3D11CreateDevice(
     IDXGIAdapter* adapter, D3D_DRIVER_TYPE driverType, HMODULE software, UINT flags,
     const D3D_FEATURE_LEVEL* levels, UINT numLevels, UINT sdkVersion,
     ID3D11Device** device, D3D_FEATURE_LEVEL* outLevel, ID3D11DeviceContext** context) {
+  EnsureInit();
   if (!InitBackend()) return E_FAIL;
   HRESULT hr = g_createDevice(adapter, driverType, software, flags, levels, numLevels, sdkVersion,
                               device, outLevel, context);
@@ -841,6 +874,7 @@ extern "C" HRESULT WINAPI D3D11CreateDeviceAndSwapChain(
     const D3D_FEATURE_LEVEL* levels, UINT numLevels, UINT sdkVersion,
     const DXGI_SWAP_CHAIN_DESC* desc, IDXGISwapChain** swapChain,
     ID3D11Device** device, D3D_FEATURE_LEVEL* outLevel, ID3D11DeviceContext** context) {
+  EnsureInit();
   if (!InitBackend()) return E_FAIL;
   HRESULT hr = g_createDeviceSwap(adapter, driverType, software, flags, levels, numLevels, sdkVersion,
                                   desc, swapChain, device, outLevel, context);
@@ -866,7 +900,8 @@ BOOL APIENTRY DllMain(HMODULE hMod, DWORD reason, LPVOID) {
     char* s = strrchr(g_dir, '\\');
     if (s) *s = 0;
     DisableThreadLibraryCalls(hMod);
-    LoadInitialConfig();
+    // No file IO here: LoadInitialConfig() runs from EnsureInit() on the first
+    // D3D11CreateDevice* call (see the comment on EnsureInit).
   } else if (reason == DLL_PROCESS_DETACH) {
     if (g_log) { fclose(g_log); g_log = nullptr; }
     DeleteCriticalSection(&g_mapCs);

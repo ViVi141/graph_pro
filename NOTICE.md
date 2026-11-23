@@ -16,8 +16,8 @@ with, endorsed by, or supported by Bohemia Interactive.
 - Not a cheat, aimbot, ESP, or BattlEye bypass.
 - Not intended for multiplayer or any server with BattlEye enabled.
 - Not a redistribution of Arma 3 assets, shaders, PBOs, or models. The DXBC
-  files in `inject/presets/` are our own compiled payloads; extracted game
-  shader blobs are gitignored and not shipped.
+  files in `archive/legacy-proxy/inject/presets/` are our own compiled payloads;
+  extracted game shader blobs are gitignored and not shipped.
 - Not a complete renderer replacement. Structural limitations (no G-buffer
   normals, no clean depth, no per-pixel material response) are documented as
   NO-GO rather than worked around.

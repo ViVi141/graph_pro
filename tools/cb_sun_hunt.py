@@ -2,7 +2,10 @@
 """Hunt sun-like float3 slots across day / dusk / indoor CB dumps.
 
 Usage:
-  python tools/cb_sun_hunt.py <day_dir> <dusk_dir> <indoor_dir> [--out inject/presets/GP_light_bind.txt]
+  python tools/cb_sun_hunt.py <day_dir> <dusk_dir> <indoor_dir> [--out archive/legacy-proxy/inject/presets/GP_light_bind.txt]
+
+Classic-line helper (GP_light_auto): the proxy line and its presets were archived
+on 2026-11-23 under archive/legacy-proxy/; see docs/12 and docs/21 for evidence.
 
 Each dir should contain GP_cb_<size>_<n>.f32 dumps (from GP_cb_dump.txt) and
 optionally GP_cb_index.txt. Ranking prefers:

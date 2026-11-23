@@ -1,5 +1,9 @@
 # 12 · 渲染管线可行性验证（GO / NO-GO）
 
+> **归档注记（2026-11-23）**：本文所述的 `inject/proxy` 经典旁路线已归档到
+> [`archive/legacy-proxy/`](../archive/legacy-proxy/ARCHIVED.md)，只读保存。
+> 正文保留当时的路径与结论；Universal 线（`inject/universal/`）不在本文范围内。
+
 日期：2026-10-22  
 范围：旁路管线（引擎前向照常画，Present / PP 插入自建 pass），非完整渲染器重写。
 
@@ -68,7 +72,7 @@ flowchart LR
 
 ### 探针（已实现）
 
-[`inject/proxy/d3d11_proxy.cpp`](../inject/proxy/d3d11_proxy.cpp)：
+[`inject/proxy/d3d11_proxy.cpp`](../archive/legacy-proxy/inject/proxy/d3d11_proxy.cpp)：
 
 - 每帧 `ReassertPatches`
 - 分类计数：`quad`（count∈{3,4,6}）vs `geom`；`imm` vs `def` 上下文
@@ -101,7 +105,7 @@ python tools/scan_cb_matrix.py "<ARMA3>"
 
 ### 光源（可行性路径）
 
-预设 [`inject/presets/GP_light.txt`](../inject/presets/GP_light.txt)：`lx ly lz steps`  
+预设 [`inject/presets/GP_light.txt`](../archive/legacy-proxy/inject/presets/GP_light.txt)：`lx ly lz steps`  
 Present CB `g_p2` 传入接触阴影着色器。
 
 **Gate 2 = 部分 GO**：无 world 矩阵；有可用的主光输入通道（手调）。
@@ -151,7 +155,7 @@ python tools/contact_shadow_smoke.py
 2. 游戏目录：`copy GP_present_contact.txt GP_present.txt`（mode **4** = 红色遮挡可视化）
 3. 保留 `GP_light.txt`；前台跑固定机位，`GP_dump.txt` 抓一帧对比
 
-着色器：[`inject/present/fullscreen.hlsl`](../inject/present/fullscreen.hlsl) `ContactShadow`（沿光方向 UV 行进）。
+着色器：[`inject/present/fullscreen.hlsl`](../archive/legacy-proxy/inject/present/fullscreen.hlsl) `ContactShadow`（沿光方向 UV 行进）。
 
 **Gate 4 = GO（算法与管线接线）**；成品调参不在本阶段。
 

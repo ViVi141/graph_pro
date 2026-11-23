@@ -439,3 +439,50 @@ Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天�
 - 站岗：`exe_fn ≈ 1.02·U − 19.7`（R²≈0.98）
 - 双因子：`exe_fn ≈ −28.3 + 1.09·U + 1.55·(U·M)`（M=是否移动）
 - 固定 96 人时 wp 条数 1/2/5 → exe_fn 207/202/210（路点个数 **非**主因）
+
+---
+
+## 2026-11-23 Universal 产品线（DXVK 链式代理 + 画质包）
+
+平台：Ryzen 9 7900X + RX 7900 XT，2560×1440，YAAB 自动确定性场景。
+全文与完整 14 轮总表：[20-route2-7900x-7900xt-perf.md](20-route2-7900x-7900xt-perf.md)；
+原始数据：`extract/bench_7900x/*.json`。
+
+**性能（唯一被量化的部分）**
+
+| 组合 | Avg FPS | 1% Low | 判定 |
+|---|---|---|---|
+| 原版 DX11（均值基线 60.45） | — | — | 对照 |
+| DXVK 3.1.1 热缓存（零画质损失） | 64.08（+6.0%） | 39.15（+9.3%） | ✅ GO |
+| DXVK + Ultra GPU / Smart CPU | 71.05（+17.5%） | 43.30（+20.9%） | ✅ GO |
+| 同上 + 关云层 + `tg=25` | 74.57（+23.4%） | 47.35（+32.2%） | ✅ GO |
+| 全进程绑单 CCD0 | 54.90（−9.2%） | 33.01 | ❌ NO-GO |
+| `gp_turbo` | 61.03（+1.0%，对 DXVK 基线为负） | 36.36 | ❌ NO-GO |
+
+**画质包（AgX v4.2 / GGX PBR / SSGI / RTGI / HDR Bloom）**
+
+- `extract/ab_graphics/` 只有 5 个配置的启动日志（vanilla / legacy_aces / new_agx /
+  agx_lite / agx_v2），**没有图像指标**（锐度、对比 σ、暗部占比均未测）。
+- 按本仓库标准归类为“已接线、未量化”，不计入收益表。
+
+**工程变更（同日）**
+
+- `inject/universal/d3d11_universal.cpp`：配置读取从 `DllMain` 移到首次
+  `D3D11CreateDevice*`（`EnsureInit` + `InterlockedCompareExchange`），消除加载器锁内
+  文件 IO；新增创建计数，50 个 PS 无命中时写“游戏可能已更新”警告。
+- `tools/universal_smoke_test.py`：无头验证 DllMain 无 IO、首次建链读配置、
+  DXVK 缺失回退、hooks、`GP_replace.txt` 命中；离线可复跑。
+- `tools/verify_universal.ps1` 与两个 capture 脚本改为**只读/三段式**，
+  不再启动或强杀客户端。
+- 两套部署互斥加了硬保护：`inject\universal\install.ps1` 扫描既有 `d3d11.dll`
+  的经典代理标记并拒绝覆盖；`inject\deploy.ps1` 在检测到 Universal 残留
+  （`gp_dxvk_d3d11.dll`，或备份目录 + `dxgi.dll`/`dxvk.conf`）时拒绝部署。
+
+**经典线归档（同日）**
+
+- `inject/proxy`、`inject/presets`、`inject/present`、根目录 `deploy/remove/toggle/set-spec`
+  与经典 HLSL 整体移入 `archive/legacy-proxy/`；`tools/` 下经典构建与探针工具同步归档。
+- 归档保留原 `inject/`、`tools/` 相对结构，`proxy_smoke_test.py`、`build_tonemap.ps1`
+  等仍可在归档内离线复跑；活跃树只保留 Universal 注入线与 CPU 归因线。
+- 上一段的 `inject\deploy.ps1` 互斥保护随归档冻结；Universal 安装器仍会识别游戏目录
+  中的经典代理，并提示先运行 `archive\legacy-proxy\inject\remove.ps1`。

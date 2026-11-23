@@ -8,7 +8,7 @@ PNG / NPY / MP4 已由根目录 `.gitignore` 排除，避免把媒体文件推�
 
     python tools\contact_shadow_smoke.py        # 接触阴影离线冒烟
     python tools\make_ab_contact.py             # 由同一场景生成 ab-contact-*.png
-    python tools\proxy_smoke_test.py            # 代理本身的无头验证（不产图）
+    python archive\legacy-proxy\tools\proxy_smoke_test.py   # 经典代理的无头验证（已归档）
 
 注意：`contact_shadow_smoke.py` 的当前遮挡率是 `mean_occ_ground ≈ 0.023`
 （不是早期文档写的 0.49），详见 [../docs/12](../docs/12-pipeline-feasibility.md) 与

@@ -40,8 +40,10 @@ Not in scope:
    }
    ```
 
-3. If you changed the proxy or payloads, run `python tools\proxy_smoke_test.py`
-   (requires a built `inject\proxy\d3d11.dll`) and report the result.
+3. If you changed the Universal proxy or payloads, run
+   `python tools\universal_smoke_test.py` (requires a built
+   `inject\universal\d3d11.dll`) and report the result. The classic proxy line is
+   archived under `archive\legacy-proxy\` and no longer takes feature changes.
 4. Update the relevant doc and `docs/README.md` if you add a new document.
 5. State the evidence: command, scene, resolution, sample count, and what was
    compared. "Looks better" is not a result.
