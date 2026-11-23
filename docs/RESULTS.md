@@ -563,3 +563,44 @@ Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天�
 
 - 像素级 A/B 验证（需要一次真实运行，按仓库约定由使用者执行）。
 - VS/GS/CS 的重写：代理只钩 `CreatePixelShader`，翻译它们没有下游。
+
+---
+
+## 2026-11-23 深夜（更正）· 指纹审计的结论反了，而且抓到了真问题
+
+> 上一节写"3 把 GP_super_pbr 钥匙在当前版本不存在、PBR 从未生效"。**这个结论是错的**，
+> 本节是更正，保留错误原文以便对照（失败是数据，不是污点）。
+
+**验证方法**：新增 [tools/verify_shaders.py](../tools/verify_shaders.py)，
+把游戏目录里已部署的 `GP_replace.txt` 与 `GP_universal.log` 交叉核对，
+再经 `extract/shader-catalog.csv` 解析名字：
+
+| 钥匙 | 目录名 | 日志命中 |
+|---|---|---:|
+| 5860/42670B06 | PSPostProcessGlowNewFinalFilmic | 1 |
+| 5732/92DDC7B8 | …FinalNightFilmic | 1 |
+| 5724/F6B44573 | …BloomInitDownsample4x | 1 |
+| 10036/C8390391 | SSSMVeryHigh | 1 |
+| 9960/31F14A8E | SSSMHigh | 1 |
+| 7396/3D897E19 | SSSMNormal | 1 |
+| 16264/4AC9BAA2 | （不在缓存里） | **1** |
+| 17992/D7B6AECA | （不在缓存里） | **1** |
+| 17960/13052781 | （不在缓存里） | **1** |
+
+**结论 1**：`Dta\bin.pbo` 的 .shdc **不是运行时全集**。扫过 1943 个 PBO（本体 +
+Workshop）后确认只有 bin.pbo 带 `.shdc`，所以 `PSSSSMSuper` 的 16264/17992/17960
+三份是引擎在运行时产生/拼装出来的，缓存里只有 21144/22872（两套都真实存在）。
+**依据缓存的静态列表判"死钥匙"是错的方法**；正确方法就是这次的"清单 × 真实日志"。
+
+**结论 2（真问题）**：部署的 `GP_super_pbr.dxbc` 是 **16052 B**（11-23 04:18），
+`dist\` 里是 **16124 B**（11:50）——现网跑的是更早一次编译的 PBR 载荷。
+这类漂移现在由 `verify_shaders.py` 直接打出（"payload drift: deployed 16052 B,
+dist has 16124"）。
+
+**已做**：把三把钥匙原样恢复（含注释说明不要再按缓存去"修正"），删掉我加的两把；
+代理新增可选 `GP_dump_bytes.txt`：置入后把每个 `CreatePixelShader` 的 blob 落到
+`GP_psdump\<size>_<crc>.dxbc`，一次真实运行即可补全运行时全集；
+安装/卸载脚本会清理该目录。
+
+**教训**：目录能证明"这把钥匙是哪个着色器"，不能证明"这把钥匙一定被创建"。
+反过来的判据才可靠——**没命中才可疑**。

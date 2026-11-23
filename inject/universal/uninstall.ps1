@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.0
+#Requires -Version 5.0
 param(
     [string]$Game = '',
     [switch]$Silent
@@ -25,7 +25,7 @@ $removeList = @(
     'GP_bloom_init.dxbc','GP_sssm_veryhigh.dxbc','GP_sssm_high.dxbc','GP_ssao.dxbc','GP_super_pbr.dxbc',
     'GP_ssgi.txt','GP_rtgi_trace.dxbc','GP_rtgi_denoise.dxbc',
     'GP_amb.txt','GP_amb_stylized.txt','GP_expo.txt','GP_spec.txt','GP_universal.log',
-    'GP_enable_dump.txt','GP_dump.txt','GP_dump_ps.txt','GP_shot.raw',
+    'GP_enable_dump.txt','GP_dump.txt','GP_dump_ps.txt','GP_dump_bytes.txt','GP_shot.raw',
     # classic proxy line leftovers (inject\deploy.ps1)
     'GP_tonemap_agx.dxbc','GP_tonemap_agx_neutral.dxbc','GP_fsr1.dxbc',
     'GP_light.txt','GP_light_auto.txt','GP_light_bind.txt',
@@ -42,6 +42,8 @@ foreach ($f in $removeList) {
     $p = Join-Path $Game $f
     if (Test-Path $p) { Remove-Item $p -Force; Write-Host "  - removed $f" -ForegroundColor DarkGray }
 }
+$psdump = Join-Path $Game 'GP_psdump'
+if (Test-Path -LiteralPath $psdump) { Remove-Item -LiteralPath $psdump -Recurse -Force; Write-Host "  - removed GP_psdump\" -ForegroundColor DarkGray }
 $mDll = Join-Path $Game 'Dll\gp_mimalloc_x64.dll'
 if (Test-Path $mDll) { Remove-Item $mDll -Force }
 

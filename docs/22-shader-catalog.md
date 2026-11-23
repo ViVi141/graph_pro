@@ -47,34 +47,48 @@ extract/shdc/hlsl/<cache>/*.hlsl   ABI 骨架：能把引擎声明原样写出�
 统计：指令数中位数 **228**、p90 **387**、最大 **2056**；2464 个着色器带常量缓冲，
 604 个零资源。
 
-## 3. 指纹审计：一个已经在"空转"的功能
+## 3. 指纹审计：目录不是运行时全集（一次自我纠错）
 
-拿目录对着 `dist/graph_pro_universal/files/graphics_*/GP_replace.txt` 逐行核对，
-**9 把钥匙里有 3 把在当前游戏版本里不存在**：
+拿目录对着 `GP_replace.txt` 逐行核对，第一遍得出的结论是"9 把钥匙里有 3 把不存在，
+PBR 从未生效"。**这个结论是错的**，核对过程反而证明了另一件事——用
+[tools/verify_shaders.py](../tools/verify_shaders.py) 读一次真实运行日志：
 
-| 钥匙（size/crc32） | 目录中的对应物 | 结论 |
-|---|---|---|
-| 5860 / 42670B06 | `PSPostProcessGlowNewFinalFilmic` | ✅ |
-| 5732 / 92DDC7B8 | `PSPostProcessGlowNewFinalNightFilmic` | ✅ |
-| 5724 / F6B44573 | `PSPostProcessGlowNewBloomInitDownsample4x` | ✅ |
-| 10036 / C8390391 | `PSPostProcessSSSMVeryHigh` | ✅ |
-| 9960 / 31F14A8E | `PSPostProcessSSSMHigh` | ✅ |
-| 7396 / 3D897E19 | `PSPostProcessSSSMNormal` | ✅ |
-| 16264 / 4AC9BAA2 | **无** | ❌ 旧版本指纹 |
-| 17992 / D7B6AECA | **无** | ❌ 旧版本指纹 |
-| 17960 / 13052781 | **无** | ❌ 旧版本指纹 |
+```
+key              shader                            hits
+5860/42670B06    PSPostProcessGlowNewFinalFilmic    1
+5732/92DDC7B8    PSPostProcessGlowNewFinalNightFilmic 1
+5724/F6B44573    PSPostProcessGlowNewBloomInitDownsample4x 1
+10036/C8390391   PSPostProcessSSSMVeryHigh          1
+9960/31F14A8E    PSPostProcessSSSMHigh              1
+7396/3D897E19    PSPostProcessSSSMNormal            1
+16264/4AC9BAA2   (not in catalog)                   1
+17992/D7B6AECA   (not in catalog)                   1
+17960/13052781   (not in catalog)                   1
+PBR (PSSSSMSuper) hits: 3
+```
 
-那三把是 `GP_super_pbr.dxbc` 的钥匙，也就是说 **AgX / SSGI / Ultra 三档里宣传的
-"3D GGX PBR 材质升级"在这台机器的游戏版本上从未命中过**——它一直静默地什么都没做。
-代理不会报错，因为"没有命中"是合法状态。
+三把"不存在"的钥匙**每次运行都命中**，日志里是
+`REPLACED PS len=16264 crc=4AC9BAA2 -> 16052 bytes`。
 
-正确的钥匙在目录里：`PSSSSMSuper` 的 5_0 变体是 **21144 / 0945039F** 与
-**22872 / 3DAA0949**（4_0 是 19328/DB597CFB、21056/47C7D0E9）。已经核对过载荷与目标的
-ABI：常量缓冲名、t0–t7/t15/t16 绑定、11 个输入寄存器全部一致，所以换了钥匙之后
-替换链路是通的。三个包已改（见同日 RESULTS 记录）。
+所以正确的结论是：
 
-清单原本只存在于被 gitignore 的 `dist/`，所以这次把它们也入库了一份：
-`inject/universal/graphics/<pack>/GP_replace.txt` 是唯一事实源，dist 里的包由它拼装。
+- **`Dta\bin.pbo` 里的 .shdc 缓存不是引擎运行时的全集**。这台机器上 `PSSSSMSuper`
+  的实际变体是 16264 / 17992 / 17960 三份，而缓存里只有 21144 / 22872；
+  再往外扫 1943 个 PBO（本体 + Workshop）也只有 bin.pbo 带 `.shdc`，
+  所以这三份要么是引擎按材质特性在运行时拼出来的，要么来自缓存之外的路径。
+- **目录能证明"这把钥匙对应哪个着色器"，不能证明"这把钥匙一定被创建"**。
+  反过来，**没命中才可疑**：只要跑过一次、日志里没有 `REPLACED PS`，那才是死钥匙。
+- 所以审计的正确做法是 `verify_shaders.py` 这种"清单 × 真实日志"的交叉核对，
+  而不是拿清单对着缓存的静态列表。
+
+为了让目录补全这三份，代理新增了 `GP_dump_bytes.txt`（可选）：置入后每次
+`CreatePixelShader` 都把 blob 落到 `GP_psdump\<size>_<crc>.dxbc`，跑一次游戏
+就能把运行时全集抓齐，再喂给 `shader_catalog.py`。
+
+**顺带查出的真问题**：部署在游戏目录里的 `GP_super_pbr.dxbc` 是 **16052 B**，
+而 `dist\` 里的是 **16124 B**——也就是说现网跑的是更早一次编译的 PBR 载荷。
+`verify_shaders.py` 会把这种漂移直接打出来（"payload drift"），重新安装前不要相信
+任何一次 A/B。
 
 ## 4. 反汇编 → 重写
 

@@ -70,6 +70,11 @@ static volatile long g_ssaoReplaced = 0;
 static volatile ULONGLONG g_lastReloadMs = 0;
 static bool g_enableDump = false;
 static bool g_dumpPs = false;
+// Opt-in: write every pixel shader the engine creates to GP_psdump\<size>_<crc>.dxbc.
+// The shipped .shdc caches are NOT the complete runtime set (3 of the 9 keys the
+// PBR pack replaces do not exist in Dta\bin.pbo yet do get created at runtime),
+// so a real run is the only way to capture those blobs.
+static bool g_dumpBytes = false;
 static bool g_enableSsgi = false;
 static ID3D11Device* g_dev = nullptr;
 static ID3D11DeviceContext* g_ctx = nullptr;
@@ -315,6 +320,7 @@ static void LoadInitialConfig() {
 
   g_enableDump = GetFileAttributesA((dir + "\\GP_enable_dump.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   g_dumpPs     = GetFileAttributesA((dir + "\\GP_dump_ps.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+  g_dumpBytes  = GetFileAttributesA((dir + "\\GP_dump_bytes.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   g_enableSsgi = GetFileAttributesA((dir + "\\GP_ssgi.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   if (g_enableSsgi &&
       LoadFile(dir + "\\GP_rtgi_trace.dxbc", g_rtgiTraceBytes) &&
@@ -344,6 +350,22 @@ static void EnsureInit() {
 }
 
 // ---------------------------------------------------------------- Shader Hook
+static void DumpShaderBlob(const void* data, size_t len, uint32_t crc) {
+  char dirp[MAX_PATH];
+  snprintf(dirp, sizeof(dirp), "%s\\GP_psdump", g_dir);
+  CreateDirectoryA(dirp, nullptr);
+  char p[MAX_PATH];
+  snprintf(p, sizeof(p), "%s\\%zu_%08X.dxbc", dirp, len, crc);
+  if (GetFileAttributesA(p) != INVALID_FILE_ATTRIBUTES) return;   // captured already
+  FILE* f = fopen(p, "wb");
+  if (!f) return;
+  fwrite(data, 1, len, f);
+  fclose(f);
+  static volatile LONG n = 0;
+  if (InterlockedIncrement(&n) <= 8) {
+    Log("[GP] dumped PS blob %zu B crc=%08X -> %s\n", len, crc, p);
+  }
+}
 typedef HRESULT (STDMETHODCALLTYPE *PFN_CPS)(
     ID3D11Device*, const void*, SIZE_T, ID3D11ClassLinkage*, ID3D11PixelShader**);
 static PFN_CPS g_origCPS = nullptr;
@@ -367,6 +389,7 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
   long created = InterlockedIncrement(&g_psCreated);
   if (data && len > 0) {
     uint32_t crc = Crc32(data, len);
+    if (g_dumpBytes) DumpShaderBlob(data, (size_t)len, crc);
     if (g_dumpPs && len >= 12000) {
       std::string txt;
       int nTex = 0;
