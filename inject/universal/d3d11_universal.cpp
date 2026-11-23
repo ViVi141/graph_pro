@@ -354,10 +354,11 @@ static bool MatchGlassOrTree(const void* data, size_t len, int& outKind) {
   if (!g_treeSss.empty() &&
       HasCI(txt, "cb3[7]") &&
       HasCI(txt, "cb3[1].x") &&
+      txt.find("0x3f800000") != std::string::npos &&
       txt.find("v10.xyz") != std::string::npos &&
       txt.find("v11.xyz") != std::string::npos &&
       txt.find("v3.xyz") != std::string::npos) {
-    outKind = 2; // PSSSSMTreeAdv* (foliage crowns, excludes trunk)
+    outKind = 2; // PSSSSMTreeAdv (binary alpha-test only, never AToC)
     return true;
   }
   return false;

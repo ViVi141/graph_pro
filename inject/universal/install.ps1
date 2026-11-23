@@ -204,15 +204,15 @@ if ($Tier -ne 'none') {
 
     switch ($Tier) {
         'high' {
-            $cfgMap  = @{ vsync=0; GPU_MaxFramesAhead=1; multiSampleCount=4; AToC=15; PPAA=2; ppSSAO=6; cloudsQuality=4 }
+            $cfgMap  = @{ vsync=0; GPU_MaxFramesAhead=1; multiSampleCount=4; AToC=0; PPAA=2; ppSSAO=6; cloudsQuality=4 }
             $profMap = @{ textureQuality=4; anisoFilter=16; shadowQuality=5; shadowZDistance=100; sceneComplexity=400000; preferredObjectViewDistance=1000; viewDistance=3800; terrainGrid=12.5; pipViewDistance=500 }
         }
         'high_fps' {
-            $cfgMap  = @{ vsync=0; GPU_MaxFramesAhead=1; multiSampleCount=4; AToC=15; PPAA=2; ppSSAO=6; cloudsQuality=0 }
+            $cfgMap  = @{ vsync=0; GPU_MaxFramesAhead=1; multiSampleCount=4; AToC=0; PPAA=2; ppSSAO=6; cloudsQuality=0 }
             $profMap = @{ textureQuality=4; anisoFilter=16; shadowQuality=5; shadowZDistance=100; sceneComplexity=400000; preferredObjectViewDistance=1000; viewDistance=3800; terrainGrid=25; pipViewDistance=500 }
         }
         'mid' {
-            $cfgMap  = @{ vsync=0; GPU_MaxFramesAhead=1; multiSampleCount=2; AToC=15; PPAA=2; ppSSAO=4; cloudsQuality=2 }
+            $cfgMap  = @{ vsync=0; GPU_MaxFramesAhead=1; multiSampleCount=2; AToC=0; PPAA=2; ppSSAO=4; cloudsQuality=2 }
             $profMap = @{ textureQuality=4; anisoFilter=16; shadowQuality=4; shadowZDistance=100; sceneComplexity=350000; preferredObjectViewDistance=1000; viewDistance=3000; terrainGrid=12.5; pipViewDistance=500 }
         }
         'igpu' {
