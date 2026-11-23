@@ -26,7 +26,7 @@ GraphPro Universal — Arma 3 全硬件通用性能底座（+ 零CPU开销新一
 常用参数：
   -Tier auto|high|high_fps|mid|igpu|none       (默认 auto；选 none 仅装 DXVK 不改游戏配置)
   -Backend auto|dxvk|native                    (默认 auto)
-  -Graphics off|agx|agx_lite|legacy            (默认 off 纯净性能；选 agx 启用完整新一代画质层)
+  -Graphics off|agx|agx_lite|ssgi|legacy       (默认 off 纯净性能；agx = 3D GGX PBR + v4.2；ssgi = 路线A 3D PBR + 路线B 线性HDR SSGI 间接光反弹)
 
 一键卸载（完整恢复所有备份配置与文件）：
   powershell -NoProfile -ExecutionPolicy Bypass -File uninstall.ps1

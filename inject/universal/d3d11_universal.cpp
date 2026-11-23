@@ -66,8 +66,18 @@ static volatile long g_ssaoReplaced = 0;
 static volatile ULONGLONG g_lastReloadMs = 0;
 static bool g_enableDump = false;
 static bool g_dumpPs = false;
+static bool g_enableSsgi = false;
 static ID3D11Device* g_dev = nullptr;
 static ID3D11DeviceContext* g_ctx = nullptr;
+
+// SSGI zero-copy depth forwarding (captures linear depth SRV from SSSM pass -> binds to Tonemap t2)
+static ID3D11PixelShader*        g_sssmPS[4] = {};
+static int                       g_sssmCount = 0;
+static ID3D11PixelShader*        g_tonemapPS = nullptr;
+static ID3D11ShaderResourceView* g_lastSlot0SRV = nullptr;
+static ID3D11ShaderResourceView* g_ssgiDepthSRV = nullptr;
+static ID3D11PixelShader*        g_curPS = nullptr;
+static volatile long             g_ssgiBindLogs = 0;
 
 // ---------------------------------------------------------------- Helpers
 static void Log(const char* fmt, ...) {
@@ -218,6 +228,7 @@ static void LoadInitialConfig() {
 
   g_enableDump = GetFileAttributesA((dir + "\\GP_enable_dump.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   g_dumpPs     = GetFileAttributesA((dir + "\\GP_dump_ps.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+  g_enableSsgi = GetFileAttributesA((dir + "\\GP_ssgi.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   ReloadDynamicConfig(true);
   Log("[GP] config: backend=%s amb=%.2f/%.2f tint=%.2f/%.2f expo=%u(%.2f..%.2f) spec=%d(%.2f)\n",
       g_backendMode, g_ambScale, g_aeScale, g_tintR, g_tintB,
@@ -263,7 +274,19 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
     for (const auto& r : g_repl) {
       if (r.size == len && r.crc == crc) {
         Log("[GP] REPLACED PS len=%zu crc=%08X -> %zu bytes\n", len, crc, r.data.size());
-        return g_origCPS(self, r.data.data(), r.data.size(), linkage, ppShader);
+        HRESULT hr = g_origCPS(self, r.data.data(), r.data.size(), linkage, ppShader);
+        if (SUCCEEDED(hr) && ppShader && *ppShader && g_enableSsgi) {
+          if (crc == 0x42670B06u) {
+            g_tonemapPS = *ppShader;
+            Log("[GP] SSGI tracked Tonemap PS=%p\n", g_tonemapPS);
+          } else if (crc == 0xC8390391u || crc == 0x31F14A8Eu || crc == 0x3D897E19u || crc == 0xF811038Eu) {
+            if (g_sssmCount < 4) {
+              g_sssmPS[g_sssmCount++] = *ppShader;
+              Log("[GP] SSGI tracked SSSM PS[%d]=%p (crc=%08X)\n", g_sssmCount - 1, *ppShader, crc);
+            }
+          }
+        }
+        return hr;
       }
     }
     if (!g_ssao.empty() && LooksLikeSSAOFinal(data, len)) {
@@ -402,16 +425,72 @@ static void PatchSlot(void** vt, int idx, void* fn, void** orig) {
   VirtualProtect(&vt[idx], sizeof(void*), old, &tmp);
 }
 
+// ---------------------------------------------------------------- SSGI Depth SRV Forwarding Hooks (slot 8 & 9)
+typedef void (STDMETHODCALLTYPE *PFN_PSSetSRVs)(ID3D11DeviceContext*, UINT, UINT, ID3D11ShaderResourceView* const*);
+typedef void (STDMETHODCALLTYPE *PFN_PSSetShader)(ID3D11DeviceContext*, ID3D11PixelShader*, ID3D11ClassInstance* const*, UINT);
+static PFN_PSSetSRVs   g_origPSSetSRVs   = nullptr;
+static PFN_PSSetShader g_origPSSetShader = nullptr;
+
+static bool IsSssmShader(ID3D11PixelShader* ps) {
+  if (!ps) return false;
+  for (int i = 0; i < g_sssmCount; i++) if (g_sssmPS[i] == ps) return true;
+  return false;
+}
+
+static void CaptureDepthSrv(ID3D11ShaderResourceView* srv) {
+  if (!srv || srv == g_ssgiDepthSRV) return;
+  srv->AddRef();
+  ID3D11ShaderResourceView* old = (ID3D11ShaderResourceView*)InterlockedExchangePointer((PVOID*)&g_ssgiDepthSRV, srv);
+  if (old) old->Release();
+  if (InterlockedIncrement(&g_ssgiBindLogs) <= 3) {
+    Log("[GP] SSGI captured linear depth SRV=%p\n", srv);
+  }
+}
+
+static void STDMETHODCALLTYPE Hook_PSSetShaderResources(
+    ID3D11DeviceContext* ctx, UINT startSlot, UINT numViews, ID3D11ShaderResourceView* const* ppViews) {
+  if (g_enableSsgi && ppViews && startSlot == 0 && numViews >= 1 && ppViews[0]) {
+    g_lastSlot0SRV = ppViews[0];
+    if (IsSssmShader(g_curPS)) {
+      CaptureDepthSrv(ppViews[0]);
+    }
+  }
+  g_origPSSetSRVs(ctx, startSlot, numViews, ppViews);
+}
+
+static void STDMETHODCALLTYPE Hook_PSSetShader(
+    ID3D11DeviceContext* ctx, ID3D11PixelShader* ps, ID3D11ClassInstance* const* ppCls, UINT numCls) {
+  g_origPSSetShader(ctx, ps, ppCls, numCls);
+  if (!g_enableSsgi) return;
+  g_curPS = ps;
+  if (IsSssmShader(ps) && g_lastSlot0SRV) {
+    CaptureDepthSrv(g_lastSlot0SRV);
+  } else if (ps && ps == g_tonemapPS && g_ssgiDepthSRV) {
+    ID3D11ShaderResourceView* d = g_ssgiDepthSRV;
+    g_origPSSetSRVs(ctx, 2, 1, &d);
+    static volatile long bindCount = 0;
+    if (InterlockedIncrement(&bindCount) <= 3) {
+      Log("[GP] SSGI bound linear depth SRV=%p -> Tonemap t2\n", d);
+    }
+  }
+}
+
 static bool NeedContextHook() {
   return (g_ambScale > 0.0f) || (g_aeScale > 0.0f) || (g_expoSize > 0) || (g_specMode > 0);
 }
 
 static void HookContext(ID3D11DeviceContext* ctx) {
-  if (!ctx || !NeedContextHook()) return;
+  if (!ctx) return;
   void** vt = *(void***)ctx;
   if (!vt) return;
-  PatchSlot(vt, 14, (void*)Hook_Map, (void**)&g_origMap);
-  PatchSlot(vt, 15, (void*)Hook_Unmap, (void**)&g_origUnmap);
+  if (NeedContextHook()) {
+    PatchSlot(vt, 14, (void*)Hook_Map, (void**)&g_origMap);
+    PatchSlot(vt, 15, (void*)Hook_Unmap, (void**)&g_origUnmap);
+  }
+  if (g_enableSsgi) {
+    PatchSlot(vt, 8, (void*)Hook_PSSetShaderResources, (void**)&g_origPSSetSRVs);
+    PatchSlot(vt, 9, (void*)Hook_PSSetShader, (void**)&g_origPSSetShader);
+  }
 }
 
 typedef HRESULT (STDMETHODCALLTYPE *PFN_Deferred)(void*, UINT, void**);
@@ -434,7 +513,7 @@ static void HookDevice(ID3D11Device* dev) {
   void** vt = *(void***)dev;
   if (!vt) return;
   PatchSlot(vt, 15, (void*)Hook_CreatePixelShader, (void**)&g_origCPS);
-  if (NeedContextHook()) {
+  if (NeedContextHook() || g_enableSsgi) {
     PatchSlot(vt, 27, (void*)Hook_D0, (void**)&g_pd[0]);
     ID3D11Device1* d1 = nullptr;
     if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D11Device1), (void**)&d1)) && d1) {
@@ -452,8 +531,8 @@ static void HookDevice(ID3D11Device* dev) {
       d1->Release();
     }
   }
-  Log("[GP] device hooks active (%s, ctxHook=%d)\n",
-      g_usingDxvk ? "DXVK Vulkan" : "Native DX11", (int)NeedContextHook());
+  Log("[GP] device hooks active (%s, ctxHook=%d, ssgi=%d)\n",
+      g_usingDxvk ? "DXVK Vulkan" : "Native DX11", (int)NeedContextHook(), (int)g_enableSsgi);
 }
 
 // ---------------------------------------------------------------- Optional A/B SwapChain Capture (ONLY when GP_enable_dump.txt exists)
