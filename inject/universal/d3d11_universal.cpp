@@ -65,6 +65,7 @@ static volatile long g_ssaoReplaced = 0;
 
 static volatile ULONGLONG g_lastReloadMs = 0;
 static bool g_enableDump = false;
+static bool g_dumpPs = false;
 static ID3D11Device* g_dev = nullptr;
 static ID3D11DeviceContext* g_ctx = nullptr;
 
@@ -216,6 +217,7 @@ static void LoadInitialConfig() {
   }
 
   g_enableDump = GetFileAttributesA((dir + "\\GP_enable_dump.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+  g_dumpPs     = GetFileAttributesA((dir + "\\GP_dump_ps.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   ReloadDynamicConfig(true);
   Log("[GP] config: backend=%s amb=%.2f/%.2f tint=%.2f/%.2f expo=%u(%.2f..%.2f) spec=%d(%.2f)\n",
       g_backendMode, g_ambScale, g_aeScale, g_tintR, g_tintB,
@@ -245,6 +247,19 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
     ID3D11ClassLinkage* linkage, ID3D11PixelShader** ppShader) {
   if (data && len > 0) {
     uint32_t crc = Crc32(data, len);
+    if (g_dumpPs && len >= 12000) {
+      std::string txt;
+      int nTex = 0;
+      bool hasT15 = false, hasT16 = false, hasCB11 = false;
+      if (DisassembleInto(data, len, txt)) {
+        for (size_t i = 0; i + 22 < txt.size(); i++)
+          if (!strncmp(txt.c_str() + i, "dcl_resource_texture2d", 22)) nTex++;
+        hasT15  = txt.find(" t15") != std::string::npos;
+        hasT16  = txt.find(" t16") != std::string::npos;
+        hasCB11 = txt.find("CB11[192]") != std::string::npos;
+      }
+      Log("[GP] PS len=%zu crc=%08X nTex=%d t15=%d t16=%d cb11=%d\n", len, crc, nTex, (int)hasT15, (int)hasT16, (int)hasCB11);
+    }
     for (const auto& r : g_repl) {
       if (r.size == len && r.crc == crc) {
         Log("[GP] REPLACED PS len=%zu crc=%08X -> %zu bytes\n", len, crc, r.data.size());

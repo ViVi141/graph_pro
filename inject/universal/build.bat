@@ -16,4 +16,5 @@ if "%FXC%"=="" (
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo bloom_hdr_init.dxbc       bloom_hdr_init.hlsl     || exit /b 1
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /D CASCADE_BLEND=1 /Fo sssm_veryhigh.dxbc sssm_soft_contact.hlsl || exit /b 1
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /D CASCADE_BLEND=0 /Fo sssm_high.dxbc     sssm_soft_contact.hlsl || exit /b 1
-echo BUILT universal d3d11.dll + 5 DXBC payloads OK
+"%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo ps_sssm_super_pbr.dxbc ps_sssm_super_pbr.hlsl || exit /b 1
+echo BUILT universal d3d11.dll + 6 DXBC payloads OK
