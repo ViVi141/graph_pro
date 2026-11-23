@@ -604,3 +604,34 @@ dist has 16124"）。
 
 **教训**：目录能证明"这把钥匙是哪个着色器"，不能证明"这把钥匙一定被创建"。
 反过来的判据才可靠——**没命中才可疑**。
+
+---
+
+## 2026-11-23 21:10 · "植被/岩石闪动、位置瞬移" 的定位
+
+**报告**：装上新构建（`0ED2B6CE`）+ 新 PBR 载荷（16124 B）后，所有植被、岩石闪动并瞬移。
+
+**日志给出的三个事实**（`GP_universal.log`，43 行）：
+
+1. 新构建生效：`device hooks active (… ctxHook=0, mapHook=1, ssgi=1)`；
+2. 九把钥匙全部命中（含 PBR 三把 → 16124 B），RTGI 在跑（`Multi-Pass RTGI executed`）；
+3. `GP_dump_bytes.txt` 抓到 **234** 个运行时 PS（1.57 MB），其中就有
+   `16264/4AC9BAA2`、`17992/D7B6AECA`、`17960/13052781` 三份。
+
+**关键观察**：dump 出来的运行时着色器只有 **3 个 chunk、没有 RDEF**
+（`Approximately 0 instruction slots used`），即引擎传给 `CreatePixelShader` 的是
+**链接后的瘦身 shader**，与 `.shdc` 缓存里的带反射版本不是同一份字节。这解释了
+上一节"缓存里找不到却每次都命中"的现象。
+
+**最可能的原因**：本版给 RTGI 新加了 `DrawInstanced` / `DrawIndexedInstanced`
+（vtable 20/21）的拦截，而拦截判据只有"当前 PS == tonemap PS"。草/岩石是实例化绘制，
+若它们在延迟命令列表里执行、而 `g_curPS` 还停在上一帧最后的 tonemap，判据就会误成立，
+于是实例化几何被塞进三个全屏 pass 里画 —— 画面就是"位置乱跳"。
+
+**修复**：给四个 draw 钩子加几何尺寸判据 `RtgiEligible(count, instances)`
+（`count <= 16 && instances <= 1`），只有真正的全屏三角形/四边形才可能被 RTGI 接管；
+被判据挡下的绘制写 `RTGI guard: skipped draw count=… instances=…`（前 5 条），
+下次运行就能确认是不是这个原因。
+
+**仍未排除**：PBR 载荷换版（16052 → 16124 B）。若加判据后仍闪，下一步把
+`GP_replace.txt` 里三行 `GP_super_pbr` 删掉再跑一次即可二分。

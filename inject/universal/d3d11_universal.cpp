@@ -611,6 +611,24 @@ static PFN_DrawInstanced        g_origDrawInstanced        = nullptr;
 static volatile LONG g_tonemapArms = 0;
 static volatile LONG g_rtgiRuns    = 0;
 static volatile LONG g_rtgiWarned  = 0;
+static volatile LONG g_rtgiRejects = 0;
+
+// A draw the RTGI pass may take over has to look like the fullscreen tonemap
+// pass: a handful of vertices, no instancing. The PS-identity guard alone is
+// not enough - once instanced draws are hooked, grass/rocks instances can be
+// dispatched while g_curPS still points at the tonemap shader (deferred command
+// lists do not rebind a PS every frame), and feeding that geometry through the
+// RTGI fullscreen shaders visibly scrambles the scene.
+static bool RtgiEligible(UINT count, UINT instances) {
+  return count > 0 && count <= 16 && instances <= 1;
+}
+
+static void NoteRejectedRtgiDraw(UINT count, UINT instances) {
+  if (InterlockedIncrement(&g_rtgiRejects) <= 5) {
+    Log("[GP] RTGI guard: skipped draw count=%u instances=%u (not fullscreen-sized)\n",
+        count, instances);
+  }
+}
 
 static void NoteTonemapDrawArmed() {
   LONG arms = InterlockedIncrement(&g_tonemapArms);
@@ -758,16 +776,22 @@ static void ExecuteMultiPassRtgi(ID3D11DeviceContext* ctx, DrawFn&& doDraw) {
 
 static void STDMETHODCALLTYPE Hook_Draw(ID3D11DeviceContext* ctx, UINT vCount, UINT vStart) {
   if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
-    ExecuteMultiPassRtgi(ctx, [&]() { g_origDraw(ctx, vCount, vStart); });
-    return;
+    if (RtgiEligible(vCount, 1)) {
+      ExecuteMultiPassRtgi(ctx, [&]() { g_origDraw(ctx, vCount, vStart); });
+      return;
+    }
+    NoteRejectedRtgiDraw(vCount, 1);
   }
   g_origDraw(ctx, vCount, vStart);
 }
 
 static void STDMETHODCALLTYPE Hook_DrawIndexed(ID3D11DeviceContext* ctx, UINT iCount, UINT iStart, INT vBase) {
   if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
-    ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawIndexed(ctx, iCount, iStart, vBase); });
-    return;
+    if (RtgiEligible(iCount, 1)) {
+      ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawIndexed(ctx, iCount, iStart, vBase); });
+      return;
+    }
+    NoteRejectedRtgiDraw(iCount, 1);
   }
   g_origDrawIndexed(ctx, iCount, iStart, vBase);
 }
@@ -775,8 +799,11 @@ static void STDMETHODCALLTYPE Hook_DrawIndexed(ID3D11DeviceContext* ctx, UINT iC
 static void STDMETHODCALLTYPE Hook_DrawIndexedInstanced(
     ID3D11DeviceContext* ctx, UINT iCount, UINT iStart, UINT iInst, INT vBase) {
   if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
-    ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawIndexedInstanced(ctx, iCount, iStart, iInst, vBase); });
-    return;
+    if (RtgiEligible(iCount, iInst)) {
+      ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawIndexedInstanced(ctx, iCount, iStart, iInst, vBase); });
+      return;
+    }
+    NoteRejectedRtgiDraw(iCount, iInst);
   }
   g_origDrawIndexedInstanced(ctx, iCount, iStart, iInst, vBase);
 }
@@ -784,8 +811,11 @@ static void STDMETHODCALLTYPE Hook_DrawIndexedInstanced(
 static void STDMETHODCALLTYPE Hook_DrawInstanced(
     ID3D11DeviceContext* ctx, UINT vCount, UINT vStart, UINT vInst) {
   if (!g_inRtgiPass && g_enableMultiPassRtgi && g_curPS && g_curPS == g_tonemapPS && g_ssgiDepthSRV) {
-    ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawInstanced(ctx, vCount, vStart, vInst); });
-    return;
+    if (RtgiEligible(vCount, vInst)) {
+      ExecuteMultiPassRtgi(ctx, [&]() { g_origDrawInstanced(ctx, vCount, vStart, vInst); });
+      return;
+    }
+    NoteRejectedRtgiDraw(vCount, vInst);
   }
   g_origDrawInstanced(ctx, vCount, vStart, vInst);
 }
