@@ -92,14 +92,22 @@ if (Test-Path -LiteralPath $existingDll) {
     }
 }
 
-# 4. Backup any existing user d3d11/dxgi DLLs
+# 4. Backup any existing *non-GraphPro / non-DXVK* user d3d11/dxgi DLLs
+function Test-IsGraphProOrDxvkDll([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return $false }
+    $txt = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($path))
+    return ($txt.Contains('GP_universal.log') -or $txt.Contains('GP_shader.log') -or $txt.Contains('DXVK_HUD') -or $txt.Contains('dxvk.conf'))
+}
+
 $bakDir = Join-Path $Game '_gp_universal_backup'
 New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
-foreach ($f in @('d3d11.dll','dxgi.dll','dxvk.conf')) {
+foreach ($f in @('d3d11.dll','dxgi.dll')) {
     $dst = Join-Path $Game $f
     $bak = Join-Path $bakDir $f
     if ((Test-Path $dst) -and -not (Test-Path $bak)) {
-        Copy-Item $dst $bak -Force
+        if (-not (Test-IsGraphProOrDxvkDll $dst)) {
+            Copy-Item $dst $bak -Force
+        }
     }
 }
 

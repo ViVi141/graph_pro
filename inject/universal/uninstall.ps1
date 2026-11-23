@@ -47,9 +47,18 @@ if (Test-Path $mDll) { Remove-Item $mDll -Force }
 
 $bakDir = Join-Path $Game '_gp_universal_backup'
 if (Test-Path $bakDir) {
-    foreach ($f in @('d3d11.dll','dxgi.dll','dxvk.conf')) {
+    foreach ($f in @('d3d11.dll','dxgi.dll')) {
         $b = Join-Path $bakDir $f
-        if (Test-Path $b) { Copy-Item $b (Join-Path $Game $f) -Force; Write-Host "  + restored $f" -ForegroundColor Green }
+        if (Test-Path $b) {
+            $txt = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($b))
+            $isOwn = ($txt.Contains('GP_universal.log') -or $txt.Contains('GP_shader.log') -or $txt.Contains('DXVK_HUD') -or $txt.Contains('dxvk.conf'))
+            if (-not $isOwn) {
+                Copy-Item $b (Join-Path $Game $f) -Force
+                Write-Host "  + restored $f" -ForegroundColor Green
+            } else {
+                Write-Host "  - skipped restoring GraphPro/DXVK $f from backup" -ForegroundColor DarkGray
+            }
+        }
     }
     $cfgBak = Join-Path $bakDir 'Arma3.cfg'
     $cfgDst = Join-Path $env:USERPROFILE 'Documents\Arma 3\Arma3.cfg'
