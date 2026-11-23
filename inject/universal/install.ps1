@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.0
+#Requires -Version 5.0
 param(
     [string]$Game = '',
     [ValidateSet('auto', 'high', 'high_fps', 'mid', 'igpu', 'none')]
@@ -192,6 +192,16 @@ if ($Tier -ne 'none') {
         return $text
     }
 
+    # Arma 3 parses these files as plain text, so a UTF-8 BOM would glue U+FEFF
+    # onto the first key. PowerShell 5.1's "-Encoding UTF8" writes a BOM; write
+    # without one instead (same as config\apply-quality.ps1) and drop any BOM
+    # that is already present in the file.
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    function Write-TextNoBom([string]$path, [string]$text) {
+        if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
+        [System.IO.File]::WriteAllText($path, $text, $utf8NoBom)
+    }
+
     switch ($Tier) {
         'high' {
             $cfgMap  = @{ vsync=0; GPU_MaxFramesAhead=1; multiSampleCount=4; AToC=15; PPAA=2; ppSSAO=6; cloudsQuality=4 }
@@ -216,7 +226,7 @@ if ($Tier -ne 'none') {
     if (Test-Path $cfgPath) {
         $cfgBak = Join-Path $bakDir 'Arma3.cfg'
         if (-not (Test-Path $cfgBak)) { Copy-Item $cfgPath $cfgBak -Force }
-        Set-Content -Path $cfgPath -Value (Apply-KV (Get-Content $cfgPath -Raw) $cfgMap) -NoNewline -Encoding UTF8
+        Write-TextNoBom $cfgPath (Apply-KV (Get-Content $cfgPath -Raw) $cfgMap)
         Write-Host "[OK] 已优化 Arma3.cfg (tier=$Tier)" -ForegroundColor Green
     }
 
@@ -231,7 +241,7 @@ if ($Tier -ne 'none') {
     foreach ($pf in $profiles) {
         $pfBak = Join-Path $bakDir ($pf.Name + '.bak')
         if (-not (Test-Path $pfBak)) { Copy-Item $pf.FullName $pfBak -Force }
-        Set-Content -Path $pf.FullName -Value (Apply-KV (Get-Content $pf.FullName -Raw) $profMap) -NoNewline -Encoding UTF8
+        Write-TextNoBom $pf.FullName (Apply-KV (Get-Content $pf.FullName -Raw) $profMap)
         Write-Host "[OK] 已优化存档配置: $($pf.FullName)" -ForegroundColor Green
     }
 }

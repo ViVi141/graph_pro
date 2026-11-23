@@ -151,6 +151,50 @@ def main():
     cps = CreatePS(dev, ctypes.cast(buf, ctypes.c_void_p), len(blob), None, ctypes.byref(ps))
     print("CreatePixelShader hr=0x%08X ps=%s (expect REPLACED PS)" % (cps & 0xFFFFFFFF, ps.value))
 
+    # Late config: a file dropped in AFTER the device exists must be picked up by
+    # the 2 s stamp poll inside the Unmap wrapper, and constant injection must
+    # start working without a restart. Regression guard: NeedContextHook() used
+    # to be sampled once at device creation, so such a file was silently ignored.
+    with open(os.path.join(moddir, "GP_amb.txt"), "w") as f:
+        f.write("2.0 1.0 1.0 1.0\n")
+
+    class BUFFER_DESC(ctypes.Structure):
+        _fields_ = [("ByteWidth", wintypes.UINT), ("Usage", wintypes.UINT),
+                    ("BindFlags", wintypes.UINT), ("CPUAccessFlags", wintypes.UINT),
+                    ("MiscFlags", wintypes.UINT), ("StructureByteStride", wintypes.UINT)]
+
+    class MAPPED_SUBRESOURCE(ctypes.Structure):
+        _fields_ = [("pData", ctypes.c_void_p), ("RowPitch", wintypes.UINT),
+                    ("DepthPitch", wintypes.UINT)]
+
+    vtctx = ctypes.cast(ctx, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))[0]
+    CreateBuffer = ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p, ctypes.POINTER(BUFFER_DESC),
+                                      ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(vtdev[3])
+    MapFn = ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT,
+                               ctypes.c_int, wintypes.UINT,
+                               ctypes.POINTER(MAPPED_SUBRESOURCE))(vtctx[14])
+    UnmapFn = ctypes.WINFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p,
+                                 wintypes.UINT)(vtctx[15])
+
+    # DYNAMIC constant buffer with CPU write access, 224 B = the material CB.
+    bd = BUFFER_DESC(224, 2, 0x4, 0x10000, 0, 0)
+    cbuf = ctypes.c_void_p()
+    cbhr = CreateBuffer(dev, ctypes.byref(bd), None, ctypes.byref(cbuf))
+    map_ok = 0
+    if cbhr == 0 and cbuf.value:
+        for _ in range(2):                      # 1st Unmap: poll detects the file, 2nd applies it
+            m = MAPPED_SUBRESOURCE()
+            if MapFn(ctx, cbuf, 0, 4, 0, ctypes.byref(m)) != 0:   # D3D11_MAP_WRITE_DISCARD
+                break
+            floats = (ctypes.c_float * 56).from_address(m.pData)
+            for idx in (4, 5, 6, 36, 37, 38):
+                floats[idx] = 1.0
+            UnmapFn(ctx, cbuf, 0)
+            map_ok += 1
+        Release = ctypes.WINFUNCTYPE(wintypes.ULONG, ctypes.c_void_p)(
+            ctypes.cast(cbuf, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))[0][2])
+        Release(cbuf)
+
     text = open(log, encoding="utf-8", errors="replace").read() if os.path.exists(log) else ""
     print("\n--- %s ---\n%s" % (LOGNAME, text))
 
@@ -168,6 +212,9 @@ def main():
         "no false 'not adapted' warning": "no replacement matched" not in text,
         "swapchain created": hr == 0 and bool(sc.value),
         "pixel shader created": cps == 0 and bool(ps.value),
+        "224 B dynamic buffer mapped twice": map_ok == 2,
+        "config dropped in after launch is detected": "constant injection enabled by a config file that appeared after launch" in text,
+        "late config actually injects constants": "material amb/ae injected" in text,
     }
     print("--- checks ---")
     bad = 0

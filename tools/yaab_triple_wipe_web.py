@@ -9,7 +9,7 @@ import cv2
 import imageio_ffmpeg
 import numpy as np
 
-DEMO = Path(r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo")
+DEMO = Path(__file__).resolve().parents[1] / "demo"
 INJ_SRC = Path(r"<USERPROFILE>\Videos\2026-10-23 23-41-19.mp4")
 VAN_SRC = Path(r"<USERPROFILE>\Videos\2026-10-23 23-45-17.mp4")
 

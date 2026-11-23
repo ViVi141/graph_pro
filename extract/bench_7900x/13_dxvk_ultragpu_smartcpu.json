@@ -1,14 +1,14 @@
-﻿{
+{
     "tag":  "13_dxvk_ultragpu_smartcpu",
     "timestamp":  "2026-11-23T00:04:02",
     "use_dxvk":  true,
     "malloc":  "",
     "affinity":  "",
     "windowed":  false,
-    "allocator_rpt":  "Allocator: F:\\SteamLibrary\\steamapps\\common\\Arma 3\\Dll\\tbb4malloc_bi_x64.dll [2017.0.0.0] [2017.0.0.0]",
+    "allocator_rpt":  "Allocator: <ARMA3>\\Dll\\tbb4malloc_bi_x64.dll [2017.0.0.0] [2017.0.0.0]",
     "start_line":  "[GP_YAAB_START] vd=3800 objvd=[1000,100] tg=12.5 res=[2560,1440,1056,792,1.77778,0.55,0.75,1.33333,false,0.8]\"",
     "result_line":  "[GP_YAAB_RESULT] yaabfps=71.05 frames=9876 runtime=139 ft_n=9876 p50_ms=14.00 p95_ms=19.00 p99_ms=21.00 low1_fps=43.30 low01_fps=32.49\"",
-    "rpt_path":  "C:\\Users\\74738\\AppData\\Local\\Arma 3\\Arma3_x64_2026-11-23_00-00-54.rpt",
+    "rpt_path":  "<ARMA3_LOCALAPPDATA>\\Arma3_x64_2026-11-23_00-00-54.rpt",
     "prof_report":  null,
     "yaabfps":  71.05,
     "frames":  9876,

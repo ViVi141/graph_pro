@@ -486,3 +486,51 @@ Blend 修复 + sane 门禁 + 单 RT + `GROUND_D_MAX=0.80` 后仍全场景黑天�
   等仍可在归档内离线复跑；活跃树只保留 Universal 注入线与 CPU 归因线。
 - 上一段的 `inject\deploy.ps1` 互斥保护随归档冻结；Universal 安装器仍会识别游戏目录
   中的经典代理，并提示先运行 `archive\legacy-proxy\inject\remove.ps1`。
+---
+
+## 2026-11-23 夜间 · 修复批次（全部离线可验证）
+
+> 起因：外部复核发现"发布件与源码脱节""公开仓库残留个人路径""装机器写 BOM"三类问题。
+> 本批改动不新增任何画质功能，只修可复现性与可验证性。
+
+### 数据与隐私
+
+| 项 | 改动 | 验证 |
+|---|---|---|
+| 个人路径 | `extract/bench_7900x/*.json`（18 行）与 `extract/ab_graphics/*_log.txt`（5 个）里的本机用户名目录与 Steam 库路径，换成 `<ARMA3_LOCALAPPDATA>` / `<ARMA3>` / `<STEAM>` 占位符 | 新规则全仓 0 命中；对旧 HEAD 命中 25 行 |
+| 数据可用性 | 16 个 bench JSON 的 UTF-8 BOM 去掉（原来 `json.loads` 直接报错） | 16/16 可被 `JSON.parse` 解析 |
+| CI 守卫 | `.github/workflows/ci.yml` 的隐私规则改成同时匹配单/双反斜杠、任意盘符、Steam 库路径、双反斜杠转义、`/home/`、常见邮箱域；排除自身文件 | 旧规则对旧 HEAD 命中 **0**，新规则命中 25 |
+| 脚本硬编码 | 7 个 `tools/*.py` 里写死的绝对 demo 目录改为 `Path(__file__).resolve().parents[1] / "demo"`；`annotate_prof.py` 与 `tools/dxvk/*.ps1` 改读 `ARMA3_DIR` | `python -m compileall tools` 通过；`ARMA3_DIR` 缺失时 dxvk 脚本显式报错 |
+
+### 安装器
+
+| 项 | 改动 | 验证 |
+|---|---|---|
+| BOM | `install.ps1` 与 `config/apply-7900xt-perf.ps1` 不再用 `Set-Content -Encoding UTF8`（PS 5.1 会写 BOM），改用 `UTF8Encoding($false)` + 剥离已有 BOM | 抽取真实函数实测：写入首 3 字节 `76 69 65`；带 BOM 输入被剥离 |
+| 现网数据 | 现网 `74738.Arma3Profile` 前 3 字节仍是 `EF BB BF`（本轮之前装的），下次安装/改档会被清掉 | — |
+
+### Universal 代理（`inject/universal/d3d11_universal.cpp`）
+
+| 项 | 改动 | 验证 |
+|---|---|---|
+| 迟到的配置 | `NeedContextHook()` 原来只在建 `ID3D11Device` 时判定一次，启动后再放 `GP_amb/GP_expo/GP_spec.txt` 完全不生效。现在 Map/Unmap 包装器**始终挂载**（未配置时只多一次布尔判断），Unmap 里跑 2 秒轮询，配置出现即生效并写日志 | 冒烟测试新增两例：日志出现 `constant injection enabled by a config file that appeared after launch` 与 `material amb/ae injected` |
+| 渲染线程文件 IO | 轮询改为 `GetFileAttributesEx` 时间戳/大小比对，文件没变就不 `fopen` | 冒烟测试日志中配置只加载一次 |
+| 映射表泄漏 | `g_maps` 加时间戳与 5 秒回收；表满时淘汰最旧一条（原来静默丢弃新记录）；加 `g_mapCount` 让无记录时的 Unmap 跳过扫描与锁 | 冒烟测试 224 B 缓冲两次 Map/Unmap |
+| 实例化绘制 | `ultra` 的 RTGI 只挂 `Draw`/`DrawIndexed`，若 tonemap 走 `DrawInstanced`/`DrawIndexedInstanced` 会静默不跑。补齐 20/21 槽位，并加看门狗：240 次武装却没有一次 RTGI 运行就写 WARN | 冒烟测试通过；真实场景需一次游戏运行才能触发 WARN |
+| CRC 表 | 延迟初始化的表改成 magic static（多线程建 PS 时无数据竞争） | 编译通过 |
+| 日志 | `device hooks active` 增加 `mapHook=1` 字段；amb/ae 首次注入写一行诊断 | 冒烟测试断言 |
+
+### 发布与可追溯
+
+| 项 | 改动 | 验证 |
+|---|---|---|
+| 发布件过期 | `dist/graph_pro_universal/files/d3d11.dll` 里**没有**版本自检（比源码旧），已用当前源码重建并同步 dist（dll + install/uninstall/README/Manager） | 新 dll 含 `no replacement matched` 字符串；冒烟测试 14/14 |
+| 载荷一致性 | 5 个画质包里的 12 个载荷与本次重建产物逐一比对 | 12/12 哈希一致（HLSL 只改了注释） |
+| MANIFEST | 新增 `tools/make_manifest.py` → `dist/graph_pro_universal/MANIFEST.json`（commit + 51 个文件 sha256），`verify_universal.ps1` 新增"清单 vs 当前构建""清单是否来自 HEAD"两项 | 只读运行 verify：manifest 与 repo 构建一致 PASS |
+| 文档漂移 | `ps_sssm_super_pbr.hlsl` 注释里的指纹改回与 `GP_replace.txt` 一致；`README.txt` 去掉无法溯源的"79 FPS / +31.1%"、补 `-Graphics legacy` 与"画质包未量化"边界；`demo/README` 体积改为实测 37 MB / 19 文件 | — |
+
+### 未做（有意留下）
+
+- **画质包量化**：需要真实运行（固定场景 × 3 档截图），属使用者的活；口径与工具已就绪。
+- **`LooksLikeSSAOFinal` 的加载期反汇编**：docs/21 §11.5 已裁决"按 crc 白名单会让 A3 更新后更难适配"，保持现状。
+- **把新代理重新装进游戏目录**：本轮没有改动游戏安装目录与 `Documents` 下 Arma 3 配置目录的任何文件；现网仍是旧构建，需要使用者自行跑一次 `install.ps1`。

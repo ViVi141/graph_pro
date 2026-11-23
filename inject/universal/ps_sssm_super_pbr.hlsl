@@ -1,5 +1,7 @@
 // GraphPro Route A - Real 3D Forward Material Shader PBR/GGX Upgrade
-// Replaces Arma 3 PSSSSMSuper (21144/0945039F & 22872/3DAA0949) & PSSSSMSuperAToC.
+// Replaces Arma 3 PSSSSMSuper / PSSSSMSuperAToC. The (size, crc32) keys below must
+// match GP_replace.txt; update both together when a game update changes them.
+//   16264 / 4AC9BAA2, 17992 / D7B6AECA, 17960 / 13052781
 // True 3D per-pixel lighting upgrade (NOT post-processing) with ZERO CPU overhead (ctxHook=0):
 //   1. GGX Trowbridge-Reitz Microfacet Specular + Smith-GGX Visibility + Schlick Fresnel
 //      (replaces Arma 3's 2006 Blinn-Phong min(pow(NdotH, P), 1.0) clamp!)

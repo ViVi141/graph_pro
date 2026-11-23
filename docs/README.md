@@ -50,6 +50,10 @@ Status labels:
 | [20-route2-7900x-7900xt-perf.md](20-route2-7900x-7900xt-perf.md) | Route 2: DXVK chain on 7900X/7900XT, 14-round controlled A/B (perf only) | data |
 | [21-project-review.md](21-project-review.md) | Engineering review and fix log | review |
 
+> Two documents carry the number 20 (`20-client-cpu-forensics` and
+> `20-route2-7900x-7900xt-perf`). The numbering was never reflowed: 20 was taken
+> by the CPU forensics note when Route 2 arrived. Both are current.
+>
 > The classic proxy line (docs 12 / 15 and the `inject/proxy` + `inject/presets`
 > paths they describe) was archived on 2026-11-23 under
 > [`archive/legacy-proxy/`](../archive/legacy-proxy/ARCHIVED.md). The documents keep

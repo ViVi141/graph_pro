@@ -22,6 +22,8 @@ if "%FXC%"=="" (
   exit /b 0
 )
 
+rem tonemap_agx.dxbc lands one directory up on purpose: tools\universal_smoke_test.py
+rem reads inject\tonemap_agx.dxbc as its replacement payload. The other nine stay here.
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo ..\tonemap_agx.dxbc       tonemap_agx_punchy.hlsl || exit /b 1
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo tonemap_agx_night.dxbc    tonemap_agx_night.hlsl  || exit /b 1
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo bloom_hdr_init.dxbc       bloom_hdr_init.hlsl     || exit /b 1

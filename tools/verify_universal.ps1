@@ -104,6 +104,35 @@ if ($isInstalled) {
     }
 }
 
+# --- 2b. release manifest ----------------------------------------------------
+# MANIFEST.json is written by tools\make_manifest.py into the dist tree and
+# travels with the zip, so "which build is this?" has an answer that does not
+# depend on remembering what was compiled last.
+$manifestPath = Join-Path $repo 'dist\graph_pro_universal\MANIFEST.json'
+if (Test-Path $manifestPath) {
+    $man = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $dirty = if ($man.git_dirty) { ' (dirty tree)' } else { '' }
+    Write-Host "  Build  : $($man.git_commit_short)$dirty"
+    $shaMan = $null
+    try { $shaMan = $man.files.'files/d3d11.dll'.sha256 } catch { }
+    if ($shaMan -and (Test-Path $universalDll)) {
+        $repoSha = Get-Sha $universalDll
+        $same2 = $repoSha -eq $shaMan
+        Add-Check 'dist manifest matches repo build' ($(if ($same2) { 'PASS' } else { 'FAIL' })) ("manifest {0} vs build {1}" -f $shaMan.Substring(0, 12), $repoSha.Substring(0, 12))
+    } elseif ($shaMan) {
+        Add-Check 'dist manifest has a build to compare' 'WARN' 'run inject\universal\build.bat'
+    }
+    $head = ''
+    try { $head = (& git -C $repo rev-parse --short HEAD 2>$null) } catch { }
+    if ($head -and $man.git_commit_short -and $man.git_commit_short -ne $head) {
+        Add-Check 'manifest built from current HEAD' 'WARN' "manifest $($man.git_commit_short), HEAD $head (rebuild dist)"
+    } elseif ($head) {
+        Add-Check 'manifest built from current HEAD' 'PASS' $head
+    }
+} else {
+    Add-Check 'release manifest present' 'WARN' 'run python tools\make_manifest.py after building dist'
+}
+
 # --- 3. proxy log -----------------------------------------------------------
 $logPath = Join-Path $Game 'GP_universal.log'
 if (-not (Test-Path $logPath)) {

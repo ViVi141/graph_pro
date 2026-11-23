@@ -185,7 +185,7 @@ def main() -> None:
   )
   ap.add_argument(
       "--demo",
-      default=r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo",
+      default=str(Path(__file__).resolve().parents[1] / "demo"),
       help="output demo dir",
   )
   args = ap.parse_args()

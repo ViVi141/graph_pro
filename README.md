@@ -196,7 +196,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File server\ab-soft-levers.ps1 -V
 ### 5. 离线验证
 
 ```powershell
-python tools\universal_smoke_test.py                     # Universal 代理：DllMain 无 IO + 首次建链读配置
+python tools\universal_smoke_test.py                     # Universal 代理：DllMain 无 IO + 首次建链读配置 + 迟到配置生效
+python tools\make_manifest.py                            # 刷新 dist/ 后生成发布清单（commit + 逐文件 sha256）
 python archive\legacy-proxy\tools\proxy_smoke_test.py    # 经典代理（先编译归档内 d3d11.dll）
 python archive\legacy-proxy\tools\probe_smoke_test.py    # 放大探针 + 颜色空间回读
 python archive\legacy-proxy\tools\analyze_capture.py "$env:ARMA3_DIR"

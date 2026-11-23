@@ -350,3 +350,43 @@ powershell -File tools\build_present.ps1
 移入 [`archive/legacy-proxy/`](../archive/legacy-proxy/ARCHIVED.md)。本文正文中的
 `inject/proxy/...`、`tools/proxy_smoke_test.py` 等是归档前的历史路径；离线复现命令
 见归档目录的 `ARCHIVED.md`。Universal 是唯一在维护的注入线。
+
+---
+
+**2026-11-23 夜间补记（Universal 线首次代码评审 + 修复批次）**
+
+评审范围：`inject/universal/d3d11_universal.cpp`（911 + 本次改动行）、四档画质包与 12 个
+DXBC 载荷、`install.ps1` / `uninstall.ps1` / `GraphPro_Manager.ps1`、`dist/` 发布树、
+`tools/universal_smoke_test.py` / `verify_universal.ps1`。上一段说"该线需单独复核"，
+这是那次复核。详细改动与验证见 [RESULTS.md](RESULTS.md) 同日"修复批次"一节。
+
+**结构判断（先说结论）**：Universal 的骨架是对的——以原件 `(size, crc32)` 为键替换、
+默认零 Present 钩、配置读取已移出 `DllMain`、vtable 槽位与 SDK 表一致（按
+`d3d11.h` 的 `ID3D11DeviceContextVtbl` 逐项核对：12 DrawIndexed / 13 Draw / 14 Map /
+15 Unmap / 20 DrawIndexedInstanced / 21 DrawInstanced，与代码一致）。剩下的问题集中在
+"配置生命周期"和"发布可追溯"两处，不在渲染逻辑。
+
+**本次修掉的**
+
+1. 迟到的配置不生效：`NeedContextHook()` 只在建设备时采样一次，启动后再放
+   `GP_amb/GP_expo/GP_spec.txt` 完全没有反应、也没有日志。改为 Map/Unmap 包装器常驻
+   （未配置时一次布尔判断后直通），Unmap 里做 2 秒轮询，配置出现即生效并写日志。
+   代价：`agx` 档不再有"ctxHook=0 = 零钩子"，而是"零注入"；日志字段改为
+   `ctxHook=0, mapHook=1`。
+2. 渲染线程文件 IO：轮询改成 `GetFileAttributesEx` 时间戳/大小比对，文件未变不 `fopen`。
+3. `g_maps` 泄漏：加时间戳 + 5 秒回收 + 表满淘汰最旧；无记录时 Unmap 跳过扫描与锁。
+4. `ultra` 静默失效：补 `DrawInstanced` / `DrawIndexedInstanced`（槽 20/21），并加
+   "武装 240 次但 RTGI 一次没跑"的 WARN，避免"日志看着正常其实没跑"。
+5. 发布件过期：`dist/` 里的 `d3d11.dll` 不含版本自检（比源码旧），已重建并同步；
+   新增 `tools/make_manifest.py` + `MANIFEST.json`，`verify_universal.ps1` 现在能回答
+   "装的是哪个 commit 的构建"。
+6. 数据与仓库卫生：bench JSON 的内嵌个人路径与 BOM、CI 隐私规则对 JSON 转义路径的盲区、
+   `install.ps1` 写 BOM 的 profile——见 RESULTS.md 同日条目。
+
+**明确保留的**
+
+- `LooksLikeSSAOFinal` 对每个 200–1500 B 的 PS 做一次 `D3DDisassemble`（§11.5 已裁决保留）。
+- 画质包仍"已接线、未量化"：本次不改渲染，也不假装有数字；量化需要一次真实运行。
+
+**一句话**：Universal 线现在能自证"装的是哪份源码"，代码里也没有"文件放了却不生效"
+这条暗坑；唯一还缺数字的是画质包本身。

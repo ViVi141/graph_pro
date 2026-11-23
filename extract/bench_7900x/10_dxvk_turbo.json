@@ -1,14 +1,14 @@
-﻿{
+{
     "tag":  "10_dxvk_turbo",
     "timestamp":  "2026-11-22T23:52:45",
     "use_dxvk":  true,
     "malloc":  "gp_turbo",
     "affinity":  "",
     "windowed":  false,
-    "allocator_rpt":  "Allocator: F:\\SteamLibrary\\steamapps\\common\\Arma 3\\Dll\\gp_turbo_x64.dll [] []",
+    "allocator_rpt":  "Allocator: <ARMA3>\\Dll\\gp_turbo_x64.dll [] []",
     "start_line":  "[GP_YAAB_START] vd=3800 objvd=[2300,100] tg=3.125 res=[2560,1440,1056,792,1.77778,0.55,0.75,1.33333,false,0.8]\"",
     "result_line":  "[GP_YAAB_RESULT] yaabfps=61.03 frames=8492 runtime=139.2 ft_n=8492 p50_ms=16.00 p95_ms=22.00 p99_ms=25.00 low1_fps=36.36 low01_fps=30.89\"",
-    "rpt_path":  "C:\\Users\\74738\\AppData\\Local\\Arma 3\\Arma3_x64_2026-11-22_23-49-35.rpt",
+    "rpt_path":  "<ARMA3_LOCALAPPDATA>\\Arma3_x64_2026-11-22_23-49-35.rpt",
     "prof_report":  null,
     "yaabfps":  61.03,
     "frames":  8492,

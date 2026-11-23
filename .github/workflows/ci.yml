@@ -41,9 +41,25 @@ jobs:
       - name: No personal paths or email
         shell: pwsh
         run: |
-          $hits = @(git grep -n -I -E 'C:\\Users\\[A-Za-z0-9._-]+|[A-Za-z0-9._%+-]+@qq\.com' -- . 2>$null)
+          # Matches both literal and JSON-escaped separators: C:\Users\name and C:\\Users\\name.
+          # The single-backslash-only version of this rule silently passed the
+          # extract/bench_7900x/*.json files, which store paths JSON-escaped.
+          $patterns = @(
+            '[A-Za-z]:\\{1,2}Users\\{1,2}[A-Za-z0-9._-]+',
+            'SteamLibrary',
+            '/home/[a-z0-9_]{2,}',
+            '[A-Za-z0-9._%+-]+@(qq|gmail|outlook|hotmail|163|126|foxmail|sina)\.'
+          )
+          $hits = @()
+          foreach ($p in $patterns) {
+            # Exclude this file: it necessarily contains the patterns it looks for.
+            $hits += @(git grep -n -I -E $p -- . ':!.github/workflows/ci.yml' 2>$null)
+          }
+          # Attribution address on PRIVACY.md is a GitHub noreply alias, not personal data.
+          $hits = @($hits | Where-Object { $_ -notmatch '@users\.noreply\.github\.com' })
           if ($hits.Count -gt 0) {
             $hits
             Write-Host "::error::personal data found in tracked files"
             exit 1
           }
+          Write-Host "privacy guard: clean"

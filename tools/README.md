@@ -17,8 +17,9 @@ $env:ARMA3_DIR = "C:\Program Files (x86)\Steam\steamapps\common\Arma 3"
 
 | File | Purpose |
 |---|---|
-| `universal_smoke_test.py` | Headless D3D11 device for the Universal proxy: DllMain does no file IO, config loads on first device creation. No game. |
-| `verify_universal.ps1` | Read-only deployment check: proxy identity, hashes, backend/graphics-pack state, log hits. |
+| `universal_smoke_test.py` | Headless D3D11 device for the Universal proxy: DllMain does no file IO, config loads on first device creation, shader replacement, and a config file dropped in **after** launch being picked up by the 2 s poll. No game. |
+| `verify_universal.ps1` | Read-only deployment check: proxy identity, hashes, backend/graphics-pack state, log hits, and the `dist/` release manifest. |
+| `make_manifest.py` | Writes `dist/graph_pro_universal/MANIFEST.json` (git commit + sha256 of every released file) so a deployment can be traced to a build. |
 | `estimate_mission_cpu.py` | SEU budget model (`config/cpu_catalog.json` + `docs/17` coefficients). |
 | `pe_imports.py` | PE import table (confirm the game's D3D11/DXGI surface). |
 | `rvmat_patch.py` / `pbo_rvmat_scan.py` | rvmat inspection/patching helpers for the material line. |
@@ -39,8 +40,10 @@ cd inject\universal; build.bat; cd ..\..
 # 2. offline checks (no Arma process)
 python tools\universal_smoke_test.py
 powershell -File tools\verify_universal.ps1
+# 3. after refreshing dist/, record what was shipped
+python tools\make_manifest.py
 
-# 3. archived classic-line checks (compile archive\legacy-proxy\inject\proxy first)
+# 4. archived classic-line checks (compile archive\legacy-proxy\inject\proxy first)
 python archive\legacy-proxy\tools\proxy_smoke_test.py
 python archive\legacy-proxy\tools\probe_smoke_test.py
 python archive\legacy-proxy\tools\analyze_capture.py "$env:ARMA3_DIR"

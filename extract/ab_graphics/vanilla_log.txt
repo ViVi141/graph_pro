@@ -1,5 +1,5 @@
 [GP] config: backend=auto amb=0.00/0.00 tint=1.00/1.00 expo=0(0.00..1.35) spec=0(0.00)
-[GP] backend loaded: DXVK (F:\SteamLibrary\steamapps\common\Arma 3\gp_dxvk_d3d11.dll)
+[GP] backend loaded: DXVK (<ARMA3>\gp_dxvk_d3d11.dll)
 [GP] device hooks active (DXVK Vulkan, ctxHook=0)
 [GP] device hooks active (DXVK Vulkan, ctxHook=0)
 [GP] device hooks active (DXVK Vulkan, ctxHook=0)

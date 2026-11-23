@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 INJECT = Path(r"<USERPROFILE>\Videos\2026-10-23 23-41-19.mp4")
 VANILLA = Path(r"<USERPROFILE>\Videos\2026-10-23 23-45-17.mp4")
-OUT_DIR = Path(r"c:\Users\user\Desktop\Projects\Arma3\graph_pro\demo")
+OUT_DIR = Path(__file__).resolve().parents[1] / "demo"
 
 
 def grab(cap: cv2.VideoCapture, fi: int) -> np.ndarray | None:

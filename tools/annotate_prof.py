@@ -13,7 +13,7 @@ import re
 import struct
 import sys
 
-EXE_DEFAULT = r"F:\SteamLibrary\steamapps\common\Arma 3\Arma3_x64.exe"
+EXE_DEFAULT = os.path.join(os.environ.get("ARMA3_DIR", r"<ARMA3>"), "Arma3_x64.exe")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KNOWN = os.path.join(ROOT, "extract", "cpu_samples", "known_rva.txt")
 

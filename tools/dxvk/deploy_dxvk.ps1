@@ -1,7 +1,8 @@
 param(
-    [string]$Game = 'F:\SteamLibrary\steamapps\common\Arma 3'
+    [string]$Game = $env:ARMA3_DIR
 )
 $ErrorActionPreference = 'Stop'
+if (-not $Game) { throw '未设置 Arma 3 目录：设置环境变量 ARMA3_DIR 或传 -Game <path>。' }
 if (Get-Process arma3* -ErrorAction SilentlyContinue) {
     Write-Host "请先完全退出 Arma 3 再部署 DXVK。" -ForegroundColor Yellow
     exit 1
