@@ -1,0 +1,9 @@
+# GraphPro Live Hot-Reload Tuning (b12) - Edit & Save IN-GAME (auto-reloads every 1s, zero restart!)
+exposure=1.75
+contrast=1.18
+vibrance=0.08
+sharpness=0.34
+rtgiBounce=1.35
+rtgiAo=0.72
+treeSss=0.55
+glassRefl=1.00

@@ -34,4 +34,6 @@ rem reads inject\tonemap_agx.dxbc as its replacement payload. The other nine sta
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo rtgi_trace.dxbc        rtgi_trace.hlsl        || exit /b 1
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo rtgi_denoise.dxbc      rtgi_denoise.hlsl      || exit /b 1
 "%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo tonemap_ultimate.dxbc  tonemap_ultimate.hlsl  || exit /b 1
-echo BUILT universal d3d11.dll + 10 DXBC payloads OK
+"%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo ps_sssm_glass_pbr.dxbc   ps_sssm_glass_pbr.hlsl   || exit /b 1
+"%FXC%" /nologo /T ps_5_0 /E main /O2 /Fo ps_sssm_treeadv_sss.dxbc ps_sssm_treeadv_sss.hlsl || exit /b 1
+echo BUILT universal d3d11.dll + 12 DXBC payloads OK

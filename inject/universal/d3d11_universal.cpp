@@ -61,6 +61,8 @@ static float g_specPower = 0.0f;
 struct Replacement { uint32_t size; uint32_t crc; std::vector<uint8_t> data; };
 static std::vector<Replacement> g_repl;
 static std::vector<uint8_t> g_ssao;
+static std::vector<uint8_t> g_glassPbr;
+static std::vector<uint8_t> g_treeSss;
 static volatile long g_ssaoReplaced = 0;
 
 static volatile ULONGLONG g_lastReloadMs = 0;
@@ -100,6 +102,22 @@ static ID3D11ShaderResourceView* g_rtgiSRVB = nullptr;
 static UINT                      g_rtgiW = 0, g_rtgiH = 0;
 static bool                      g_inRtgiPass = false;
 static volatile long             g_rtgiRunLogs = 0;
+
+// Live Hot-Reload Tuning Constant Buffer (b12, reloaded every 1s from GP_tune.txt — zero game restart!)
+struct TuneParams {
+  float exposure;       // default 1.75
+  float contrast;       // default 1.18
+  float vibrance;       // default 0.08
+  float sharpness;      // default 0.34
+  float rtgiBounce;     // default 1.35
+  float rtgiAo;         // default 0.72
+  float treeSss;        // default 0.55
+  float glassRefl;      // default 1.00
+};
+static TuneParams    g_tune = { 1.75f, 1.18f, 0.08f, 0.34f, 1.35f, 0.72f, 0.55f, 1.00f };
+static bool          g_tuneDirty = true;
+static ULONGLONG     g_lastTuneMs = 0;
+static ID3D11Buffer* g_tuneCB = nullptr;
 
 // ---------------------------------------------------------------- Helpers
 static void Log(const char* fmt, ...) {
@@ -247,6 +265,12 @@ static void LoadInitialConfig() {
   if (LoadFile(dir + "\\GP_ssao.dxbc", g_ssao)) {
     Log("[GP] loaded GP_ssao.dxbc (%zu bytes)\n", g_ssao.size());
   }
+  if (LoadFile(dir + "\\GP_glass_pbr.dxbc", g_glassPbr)) {
+    Log("[GP] loaded GP_glass_pbr.dxbc (%zu bytes, structural fingerprint)\n", g_glassPbr.size());
+  }
+  if (LoadFile(dir + "\\GP_treeadv_sss.dxbc", g_treeSss)) {
+    Log("[GP] loaded GP_treeadv_sss.dxbc (%zu bytes, structural fingerprint)\n", g_treeSss.size());
+  }
 
   g_enableDump = GetFileAttributesA((dir + "\\GP_enable_dump.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
   g_dumpPs     = GetFileAttributesA((dir + "\\GP_dump_ps.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
@@ -283,17 +307,60 @@ typedef HRESULT (STDMETHODCALLTYPE *PFN_CPS)(
     ID3D11Device*, const void*, SIZE_T, ID3D11ClassLinkage*, ID3D11PixelShader**);
 static PFN_CPS g_origCPS = nullptr;
 
-static bool LooksLikeSSAOFinal(const void* data, size_t len) {
-  if (len < 200 || len > 1500) return false;
-  std::string txt;
-  if (!DisassembleInto(data, len, txt)) return false;
+static int CountTex2D(const std::string& txt) {
   int tex = 0;
   for (size_t i = 0; i + 22 < txt.size(); i++) {
     if (!strncmp(txt.c_str() + i, "dcl_resource_texture2d", 22)) tex++;
   }
+  return tex;
+}
+
+static bool HasCI(const std::string& txt, const char* needle) {
+  size_t nlen = strlen(needle);
+  if (nlen == 0 || txt.size() < nlen) return false;
+  for (size_t i = 0; i + nlen <= txt.size(); i++) {
+    if (_strnicmp(txt.c_str() + i, needle, nlen) == 0) return true;
+  }
+  return false;
+}
+
+static bool LooksLikeSSAOFinal(const void* data, size_t len) {
+  if (len < 200 || len > 1500) return false;
+  std::string txt;
+  if (!DisassembleInto(data, len, txt)) return false;
+  int tex = CountTex2D(txt);
   bool hasCb = txt.find("dcl_constantbuffer") != std::string::npos;
   bool movx  = txt.find("mov o0.xyzw, r0.xxxx") != std::string::npos;
   return (tex == 1) && !hasCb && movx;
+}
+
+static bool MatchGlassOrTree(const void* data, size_t len, int& outKind) {
+  outKind = 0;
+  if (len < 6500 || len > 20000) return false;
+  if (g_glassPbr.empty() && g_treeSss.empty()) return false;
+  std::string txt;
+  if (!DisassembleInto(data, len, txt)) return false;
+  if (CountTex2D(txt) != 5) return false;
+  if (txt.find(" t15") == std::string::npos || txt.find(" t16") == std::string::npos) return false;
+  if (!g_glassPbr.empty() &&
+      HasCI(txt, "cb1[3]") &&
+      txt.find("v11.zw") != std::string::npos &&
+      txt.find("v10.xyz") != std::string::npos &&
+      txt.find("v3.") == std::string::npos &&
+      txt.find("v5.") == std::string::npos) {
+    outKind = 1; // PSSSSMGlass / PSSRGlass_Default
+    return true;
+  }
+  if (!g_treeSss.empty() &&
+      HasCI(txt, "cb3[7]") &&
+      HasCI(txt, "cb3[1].x") &&
+      txt.find("v10.xyz") != std::string::npos &&
+      txt.find("v11.xyz") != std::string::npos &&
+      txt.find("v3.xyz") != std::string::npos) {
+    outKind = 2; // PSSSSMTreeAdv* (foliage crowns, excludes trunk)
+    return true;
+  }
+  return false;
 }
 
 static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
@@ -338,6 +405,16 @@ static HRESULT STDMETHODCALLTYPE Hook_CreatePixelShader(
       InterlockedIncrement(&g_ssaoReplaced);
       Log("[GP] REPLACED SSAOFinal len=%zu crc=%08X\n", len, crc);
       return g_origCPS(self, g_ssao.data(), g_ssao.size(), linkage, ppShader);
+    }
+    int matKind = 0;
+    if (MatchGlassOrTree(data, len, matKind)) {
+      if (matKind == 1) {
+        Log("[GP] REPLACED PSSSSMGlass (PBR) len=%zu crc=%08X -> %zu bytes\n", len, crc, g_glassPbr.size());
+        return g_origCPS(self, g_glassPbr.data(), g_glassPbr.size(), linkage, ppShader);
+      } else if (matKind == 2) {
+        Log("[GP] REPLACED PSSSSMTreeAdv (3D SSS) len=%zu crc=%08X -> %zu bytes\n", len, crc, g_treeSss.size());
+        return g_origCPS(self, g_treeSss.data(), g_treeSss.size(), linkage, ppShader);
+      }
     }
   }
   // Version self-check: the game creates dozens of pixel shaders while loading.
@@ -490,6 +567,64 @@ static PFN_PSSetShader g_origPSSetShader = nullptr;
 static PFN_DrawIndexed g_origDrawIndexed = nullptr;
 static PFN_Draw        g_origDraw        = nullptr;
 
+static void ReloadTuneConfig() {
+  std::string p = std::string(g_dir) + "\\GP_tune.txt";
+  FILE* f = fopen(p.c_str(), "r");
+  if (!f) return;
+  TuneParams t = g_tune;
+  char line[256];
+  while (fgets(line, sizeof(line), f)) {
+    char k[64]{}; float v = 0.0f;
+    if (sscanf(line, "%63[^= \t]=%f", k, &v) == 2) {
+      if (!_stricmp(k, "exposure"))   t.exposure   = v;
+      else if (!_stricmp(k, "contrast"))  t.contrast   = v;
+      else if (!_stricmp(k, "vibrance"))  t.vibrance   = v;
+      else if (!_stricmp(k, "sharpness")) t.sharpness  = v;
+      else if (!_stricmp(k, "rtgiBounce"))t.rtgiBounce = v;
+      else if (!_stricmp(k, "rtgiAo"))    t.rtgiAo     = v;
+      else if (!_stricmp(k, "treeSss"))   t.treeSss    = v;
+      else if (!_stricmp(k, "glassRefl")) t.glassRefl  = v;
+    }
+  }
+  fclose(f);
+  if (memcmp(&t, &g_tune, sizeof(TuneParams)) != 0) {
+    g_tune = t;
+    g_tuneDirty = true;
+    Log("[GP] hot-reloaded GP_tune.txt: exp=%.2f con=%.2f vib=%.2f cas=%.2f gi=%.2f ao=%.2f sss=%.2f glass=%.2f\n",
+        t.exposure, t.contrast, t.vibrance, t.sharpness, t.rtgiBounce, t.rtgiAo, t.treeSss, t.glassRefl);
+  }
+}
+
+static void EnsureAndBindTuneCB(ID3D11DeviceContext* ctx) {
+  if (!ctx) return;
+  ULONGLONG now = GetTickCount64();
+  if (now - g_lastTuneMs > 1000) {
+    g_lastTuneMs = now;
+    ReloadTuneConfig();
+  }
+  if (!g_tuneCB) {
+    ID3D11Device* dev = nullptr;
+    ctx->GetDevice(&dev);
+    if (dev) {
+      D3D11_BUFFER_DESC bd{};
+      bd.ByteWidth = sizeof(TuneParams);
+      bd.Usage = D3D11_USAGE_DEFAULT;
+      bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+      D3D11_SUBRESOURCE_DATA sd{ &g_tune, 0, 0 };
+      dev->CreateBuffer(&bd, &sd, &g_tuneCB);
+      dev->Release();
+      g_tuneDirty = false;
+    }
+  }
+  if (g_tuneCB) {
+    if (g_tuneDirty) {
+      ctx->UpdateSubresource(g_tuneCB, 0, nullptr, &g_tune, 0, 0);
+      g_tuneDirty = false;
+    }
+    ctx->PSSetConstantBuffers(12, 1, &g_tuneCB);
+  }
+}
+
 static void ReleaseRtgiResources() {
   if (g_rtgiSRVA) { g_rtgiSRVA->Release(); g_rtgiSRVA = nullptr; }
   if (g_rtgiRTVA) { g_rtgiRTVA->Release(); g_rtgiRTVA = nullptr; }
@@ -572,6 +707,9 @@ static void ExecuteMultiPassRtgi(ID3D11DeviceContext* ctx, DrawFn&& doDraw) {
     halfVp.TopLeftY = 0.0f;
     halfVp.Width  = (float)halfW;
     halfVp.Height = (float)halfH;
+
+    // Bind live hot-reload tuning CB (b12) once per frame for all GP shaders
+    EnsureAndBindTuneCB(ctx);
 
     // Pass 1: Half-Res 32-Ray Horizon-Tracked RTGI + Multi-Meter GTAO
     g_origPSSetSRVs(ctx, 0, 4, nullSRVs);

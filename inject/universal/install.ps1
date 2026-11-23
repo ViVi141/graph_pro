@@ -109,7 +109,7 @@ foreach ($f in @('d3d11.dll','dxgi.dll','dxvk.conf')) {
 $staleGp = @(
     # universal line: payloads, switches, logs
     'GP_replace.txt', 'GP_tonemap.dxbc', 'GP_tonemap_night.dxbc', 'GP_bloom_init.dxbc',
-    'GP_sssm_veryhigh.dxbc', 'GP_sssm_high.dxbc', 'GP_ssao.dxbc', 'GP_super_pbr.dxbc',
+    'GP_sssm_veryhigh.dxbc', 'GP_sssm_high.dxbc', 'GP_ssao.dxbc', 'GP_super_pbr.dxbc','GP_glass_pbr.dxbc','GP_treeadv_sss.dxbc','GP_tune.txt',
     'GP_ssgi.txt', 'GP_rtgi_trace.dxbc', 'GP_rtgi_denoise.dxbc',
     'GP_amb.txt', 'GP_amb_stylized.txt', 'GP_expo.txt', 'GP_spec.txt',
     'GP_backend.txt', 'GP_enable_dump.txt', 'GP_dump.txt', 'GP_dump_ps.txt',

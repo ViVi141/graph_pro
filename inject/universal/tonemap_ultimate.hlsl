@@ -19,6 +19,12 @@ cbuffer PSCB_PostProcess : register(b13)
     float4 c[84];
 };
 
+cbuffer GP_Tune : register(b12)
+{
+    float4 gp_p0; // x=exposure, y=contrast, z=vibrance, w=sharpness
+    float4 gp_p1; // x=rtgiBounce, y=rtgiAo, z=treeSss, w=glassRefl
+};
+
 struct PSIn
 {
     float4 pos : SV_Position;
@@ -92,13 +98,20 @@ float4 main(PSIn i) : SV_Target
     float2 ts  = 1.0f / res;
     float  aspect = res.x / res.y;
 
+    // Live hot-reload parameters from GP_tune.txt (b12), with calibrated safe defaults
+    float pExposure  = (gp_p0.x > 0.1f)  ? gp_p0.x : 1.75f;
+    float pContrast  = (gp_p0.y > 0.1f)  ? gp_p0.y : 1.18f;
+    float pVibrance  = (gp_p0.z >= 0.0f && gp_p0.x > 0.1f) ? gp_p0.z : 0.08f;
+    float pSharpness = (gp_p0.w >= 0.0f && gp_p0.x > 0.1f) ? gp_p0.w : 0.34f;
+    float pGiBounce  = (gp_p1.x >= 0.0f && gp_p0.x > 0.1f) ? gp_p1.x : 1.35f;
+
     // 1. Center + 4-tap FidelityFX CAS (clean texture micro-detail without grass crunch)
     float3 cE = max(t_scene.Sample(s_scene, i.uv).rgb, 0.0f);
     float3 cN = max(t_scene.Sample(s_scene, i.uv + float2( 0.0f, -ts.y)).rgb, 0.0f);
     float3 cS = max(t_scene.Sample(s_scene, i.uv + float2( 0.0f,  ts.y)).rgb, 0.0f);
     float3 cW = max(t_scene.Sample(s_scene, i.uv + float2(-ts.x,  0.0f)).rgb, 0.0f);
     float3 cR = max(t_scene.Sample(s_scene, i.uv + float2( ts.x,  0.0f)).rgb, 0.0f);
-    float3 sceneClean = ApplyCAS(cE, cN, cW, cR, cS, 0.34f);
+    float3 sceneClean = ApplyCAS(cE, cN, cW, cR, cS, pSharpness);
 
     float dC = t_depth.SampleLevel(s_scene, i.uv, 0).x;
 
@@ -136,7 +149,7 @@ float4 main(PSIn i) : SV_Target
         float  sceneL = Luma(sceneClean);
         float3 recvAlbedo = lerp(float3(0.40f, 0.40f, 0.40f), sceneClean / max(sceneL, 0.08f), 0.45f);
         float  shadowBoost = lerp(1.35f, 0.40f, smoothstep(0.08f, 0.85f, sceneL));
-        sceneClean = sceneClean * giAO + giBounce * recvAlbedo * (1.35f * shadowBoost);
+        sceneClean = sceneClean * giAO + giBounce * recvAlbedo * (pGiBounce * shadowBoost);
     }
 
     // 4. Combine with Physical HDR Bloom
@@ -147,7 +160,7 @@ float4 main(PSIn i) : SV_Target
     float  luma  = Luma(scene);
     float  w     = saturate(1.0f - 1.8f * luma) * c[37].y;
 
-    float3 hdr = max(scene * c[37].x + glow * w, 0.0f) * 1.75f;
+    float3 hdr = max(scene * c[37].x + glow * w, 0.0f) * pExposure;
 
     // 5. Ultra-Subtle Daylight Balance + Natural AgX Filmic (calibrated for wide-gamut DCI-P3 monitors)
     float hdrLuma    = Luma(hdr);
@@ -158,18 +171,18 @@ float4 main(PSIn i) : SV_Target
     hdr *= splitTint;
 
     float3 srgb = agxTonemap(hdr);
-    srgb = pow(max(srgb, 1e-6f), 1.18f);
+    srgb = pow(max(srgb, 1e-6f), pContrast);
     float3 sCurve = srgb * srgb * (3.0f - 2.0f * srgb);
     srgb = lerp(srgb, sCurve, 0.06f);
 
-    // 6. Natural Wide-Gamut-Safe Vibrance (+0.08 max, zero neon/oversaturated greens) + IGN Dithering
+    // 6. Natural Wide-Gamut-Safe Vibrance (+0.08 default, live-tunable via GP_tune.txt) + IGN Dithering
     float g   = Luma(srgb);
     float mxC = max(srgb.r, max(srgb.g, srgb.b));
     float mnC = min(srgb.r, min(srgb.g, srgb.b));
     float curSat = (mxC - mnC) / max(mxC, 1e-4f);
     float hiProtect = 1.0f - smoothstep(0.75f, 0.99f, g);
     float loProtect = smoothstep(0.02f, 0.10f, g);
-    float vibBoost  = (0.08f * (1.0f - curSat * 0.70f)) * hiProtect * loProtect;
+    float vibBoost  = (pVibrance * (1.0f - curSat * 0.70f)) * hiProtect * loProtect;
     srgb = saturate(lerp(float3(g, g, g), srgb, 1.0f + vibBoost));
 
     float3 lin    = pow(max(srgb, 1e-6f), 2.2f);

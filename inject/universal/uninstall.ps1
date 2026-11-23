@@ -22,7 +22,7 @@ if (-not $Game -or -not (Test-Path (Join-Path $Game 'Arma3_x64.exe'))) {
 $removeList = @(
     'd3d11.dll','gp_dxvk_d3d11.dll','dxgi.dll','dxvk.conf',
     'GP_backend.txt','GP_replace.txt','GP_tonemap.dxbc','GP_tonemap_night.dxbc',
-    'GP_bloom_init.dxbc','GP_sssm_veryhigh.dxbc','GP_sssm_high.dxbc','GP_ssao.dxbc','GP_super_pbr.dxbc',
+    'GP_bloom_init.dxbc','GP_sssm_veryhigh.dxbc','GP_sssm_high.dxbc','GP_ssao.dxbc','GP_super_pbr.dxbc','GP_glass_pbr.dxbc','GP_treeadv_sss.dxbc','GP_tune.txt',
     'GP_ssgi.txt','GP_rtgi_trace.dxbc','GP_rtgi_denoise.dxbc',
     'GP_amb.txt','GP_amb_stylized.txt','GP_expo.txt','GP_spec.txt','GP_universal.log',
     'GP_enable_dump.txt','GP_dump.txt','GP_dump_ps.txt','GP_shot.raw',
