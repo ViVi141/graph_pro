@@ -1,8 +1,12 @@
+param(
+    [string]$Graphics = 'agx',
+    [string]$Tier = 'auto'
+)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $game = 'F:\SteamLibrary\steamapps\common\Arma 3'
 
-& (Join-Path $repo 'dist\graph_pro_universal\install.ps1') -Silent
+& (Join-Path $repo 'dist\graph_pro_universal\install.ps1') -Graphics $Graphics -Tier $Tier -Silent
 
 $rptDir = Join-Path $env:LOCALAPPDATA 'Arma 3'
 $before = @{}

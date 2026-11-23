@@ -96,5 +96,7 @@ float4 main(PSIn i) : SV_Target
     float3 lin = pow(max(srgb, 1e-6f), 2.2f);
     float3 outCol = pow(max(lin, 0.0f), c[1].w);
 
-    return float4(saturate(outCol), 1.0f);
+    // ±0.5/255 Interleaved Gradient Noise dithering (eliminates 8-bit sky gradient banding)
+    float dither = (frac(52.9829189f * frac(dot(i.pos.xy, float2(0.06711056f, 0.00583715f)))) - 0.5f) / 255.0f;
+    return float4(saturate(outCol + dither), 1.0f);
 }

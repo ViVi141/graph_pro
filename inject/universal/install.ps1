@@ -5,7 +5,7 @@ param(
     [string]$Tier = 'auto',
     [ValidateSet('auto', 'dxvk', 'native')]
     [string]$Backend = 'auto',
-    [ValidateSet('off', 'agx', 'legacy')]
+    [ValidateSet('off', 'agx', 'agx_lite', 'legacy')]
     [string]$Graphics = 'off',
     [switch]$Silent
 )
@@ -84,7 +84,7 @@ foreach ($f in @('d3d11.dll','dxgi.dll','dxvk.conf')) {
 }
 
 # Clean any leftover GP_* graphics configs before deploying
-foreach ($f in @('GP_replace.txt','GP_tonemap.dxbc','GP_ssao.dxbc','GP_amb.txt','GP_amb_stylized.txt','GP_expo.txt','GP_spec.txt')) {
+foreach ($f in @('GP_replace.txt','GP_tonemap.dxbc','GP_tonemap_night.dxbc','GP_bloom_init.dxbc','GP_sssm_veryhigh.dxbc','GP_sssm_high.dxbc','GP_ssao.dxbc','GP_amb.txt','GP_amb_stylized.txt','GP_expo.txt','GP_spec.txt')) {
     $p = Join-Path $Game $f
     if (Test-Path $p) { Remove-Item $p -Force }
 }
@@ -107,7 +107,11 @@ if ($Graphics -eq 'off' -and $Backend -ne 'native') {
     $dxvkConf = Join-Path $Game 'dxvk.conf'
     $confTxt = (Get-Content $dxvkConf -Raw) -replace 'dxvk\.numCompilerThreads\s*=\s*\d+', "dxvk.numCompilerThreads = $compThreads"
     Set-Content -Path $dxvkConf -Value $confTxt -NoNewline -Encoding Ascii
-    $gDir = if ($Graphics -eq 'agx') { 'graphics_agx' } else { 'graphics_legacy' }
+    $gDir = switch ($Graphics) {
+        'agx'      { 'graphics_agx' }
+        'agx_lite' { 'graphics_agx_lite' }
+        default    { 'graphics_legacy' }
+    }
     Get-ChildItem (Join-Path $src $gDir) -File -ErrorAction SilentlyContinue | ForEach-Object {
         Copy-Item $_.FullName (Join-Path $Game $_.Name) -Force
     }

@@ -1,5 +1,5 @@
-GraphPro Universal — Arma 3 全硬件通用性能底座（+ 可插拔画质层）
-===============================================================
+GraphPro Universal — Arma 3 全硬件通用性能底座（+ 零CPU开销新一代画质层）
+==========================================================================
 
 默认模式（纯净性能底座，-Graphics off）：
   - 直接部署纯净 DXVK 3.1.1 (D3D11 -> Vulkan)，零额外代理开销，100% 保留原版/你的光照模组画面
@@ -10,13 +10,23 @@ GraphPro Universal — Arma 3 全硬件通用性能底座（+ 可插拔画质层
       * -Tier high_fps : 74.57 FPS（+23.4%，1% Low +32.2%，关云层 + tg=25）
   - 零 Present 钩子：100% 兼容 AMD AFMF 2（开启后 71-75 原生帧可翻倍至 142-150+ FPS）与 Steam 覆盖层
 
+新一代画质层（-Graphics agx，全程仅 CreatePixelShader 替换，ctxHook=0，零 CPU 开销）：
+  1. AgX Punchy v3（日间 + 夜间全时段）：无过曝高光滚降 + 边缘保护微对比度 + IGN 8-bit 去色带
+  2. 物理 HDR Bloom（替换 BloomInitDownsample4x）：修复原版 saturate(luma) 截断 HDR 的雾感泛光缺陷，Karis 防闪烁
+  3. 柔和蓝噪声阴影 + 光照前屏幕空间接触阴影（替换 SSSM VeryHigh/High/Normal）：
+     - Interleaved Gradient Noise (IGN) + 16-tap Vogel Disk 消除原版 2008 颗粒噪点
+     - 直接从引擎 ShadowmapMatrix 读取每帧精确太阳方向，在光照前衰减直射光（保留 100% 天空环境光，不黑天、不伤 UI）
+  4. Natural SSAO：平滑去黑斑环境光遮蔽
+
+  * 若仅需 AgX + HDR Bloom + Natural SSAO（不含接触阴影，适合低端核显或 A/B 对比），可使用 -Graphics agx_lite。
+
 一键安装：
   powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 
 常用参数：
-  -Tier auto|high|high_fps|mid|igpu|none   (默认 auto；选 none 仅装 DXVK 不改游戏配置)
-  -Backend auto|dxvk|native                (默认 auto)
-  -Graphics off|agx|legacy                 (默认 off 纯净原版画面；选 agx 启用零帧率损耗的新版无过曝 AgX Punchy v3 + Natural SSAO)
+  -Tier auto|high|high_fps|mid|igpu|none       (默认 auto；选 none 仅装 DXVK 不改游戏配置)
+  -Backend auto|dxvk|native                    (默认 auto)
+  -Graphics off|agx|agx_lite|legacy            (默认 off 纯净性能；选 agx 启用完整新一代画质层)
 
 一键卸载（完整恢复所有备份配置与文件）：
   powershell -NoProfile -ExecutionPolicy Bypass -File uninstall.ps1
