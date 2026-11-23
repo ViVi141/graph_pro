@@ -105,8 +105,9 @@ float4 main(PSIn i) : SV_Target
     float aoFactor = lerp(1.0f, ssaoTex.x, alpha);
     directDiff += (directDiff * cb0[10].w) * ssaoTex.yzw * alpha;
 
-    float3 totalDiff = ambient * aoFactor + i.tc10.xyz + directDiff * shadow;
-    float3 color = (baseCol.rgb * totalDiff) * alpha + reflCol * (0.45f + 0.55f * shadow);
+    // Do NOT modulate sky reflection by t15 (screen-space shadow belongs to background geometry behind transparent glass!)
+    float3 totalDiff = ambient * aoFactor + i.tc10.xyz + directDiff * lerp(0.65f, 1.0f, shadow);
+    float3 color = (baseCol.rgb * totalDiff) * alpha + reflCol;
 
     // Physical distance & height fog (exact Arma 3 convention)
     int fogMode = asint(cb5[11].x);

@@ -130,7 +130,9 @@ float4 main(PSIn i) : SV_Target
                             maxSinH = sinH;
 
                             float rangeW = 1.0f - smoothstep(maxWorldDist * 0.50f, maxWorldDist, dist);
-                            float aoW    = 1.0f - smoothstep(0.5f, 4.5f, dist);
+                            // Extended 6.5m overhang/under-structure AO radius creates true shadow depth gradation
+                            // (deeper core under stilt houses, roofs, and shelters vs softer sky-lit outer shadow rim!)
+                            float aoW    = 1.0f - smoothstep(0.4f, 6.5f, dist);
                             rayAO += deltaH * aoW;
 
                             // Gather linear HDR radiance from visible occluder surface
@@ -151,7 +153,8 @@ float4 main(PSIn i) : SV_Target
     }
 
     float3 giFinal = (giAccum * (1.0f / 8.0f)) * distFade * solidMask;
-    float  aoFinal = 1.0f - saturate((aoAccum * (1.0f / 8.0f)) * 1.45f) * 0.72f * distFade * solidMask;
+    float  aoCurve = pow(saturate((aoAccum * (1.0f / 8.0f)) * 1.65f), 1.15f);
+    float  aoFinal = 1.0f - aoCurve * 0.82f * distFade * solidMask;
 
     return float4(giFinal, aoFinal);
 }

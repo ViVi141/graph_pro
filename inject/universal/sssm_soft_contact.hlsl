@@ -60,16 +60,15 @@ float4 main(PSIn i) : SV_Target
     float noise = IGN(i.pos.xy);
     float phi   = noise * 6.2831853f;
 
-    // Slightly softer penumbra than vanilla (1.55 vs 1.30), smooth blue-noise-like edge
-    float radius = 1.55f * nf[6].y;
+    // Soft photographic penumbra (2.85 texels, 24-tap IGN Vogel Disk -> silky smooth shadow edges instead of 2013 hard stencils)
+    float radius = 2.85f * nf[6].y;
 
-    // 4-tap outer early-out (identical fast path to vanilla for fully lit / fully shadowed pixels)
+    // 4-tap outer early-out (identical fast path for fully lit / fully shadowed interiors)
     float sum = 0.0f;
     [unroll]
     for (int k = 0; k < 4; k++)
     {
-        // Outer ring indices (12..15) catch penumbra boundaries reliably
-        float2 ofs = VogelDisk(12 + k, 16, phi) * radius;
+        float2 ofs = VogelDisk(20 + k, 24, phi) * radius;
         sum += t_shadow.SampleCmpLevelZero(s_shadow, smUV + ofs, smZ);
     }
 
@@ -77,12 +76,12 @@ float4 main(PSIn i) : SV_Target
     if (sum > 0.001f && sum < 3.999f)
     {
         [unroll]
-        for (int j = 0; j < 12; j++)
+        for (int j = 0; j < 20; j++)
         {
-            float2 ofs = VogelDisk(j, 16, phi) * radius;
+            float2 ofs = VogelDisk(j, 24, phi) * radius;
             sum += t_shadow.SampleCmpLevelZero(s_shadow, smUV + ofs, smZ);
         }
-        shadow = sum * 0.0625f;
+        shadow = sum * (1.0f / 24.0f);
     }
     else
     {
