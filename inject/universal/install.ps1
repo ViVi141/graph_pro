@@ -13,6 +13,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $src  = Join-Path $here 'files'
+if (-not (Test-Path (Join-Path $src 'd3d11.dll'))) {
+    $repoDist = Join-Path (Split-Path (Split-Path $here -Parent) -Parent) 'dist\graph_pro_universal\files'
+    if (Test-Path (Join-Path $repoDist 'd3d11.dll')) { $src = $repoDist }
+}
+if (-not (Test-Path (Join-Path $src 'd3d11.dll'))) {
+    throw "未找到二进制文件目录 files\d3d11.dll，请先运行 build.bat 或从 dist\graph_pro_universal 运行。"
+}
 
 if (Get-Process arma3*, arma3_x64, arma3server* -ErrorAction SilentlyContinue) {
     Write-Host "请先完全退出 Arma 3 再安装。" -ForegroundColor Yellow
